@@ -73,7 +73,6 @@ export default function MapView() {
     let cancelled = false;
     (async () => {
       if (typeof window === "undefined") return;
-      await import("leaflet/dist/leaflet.css");
       const rl = await import("react-leaflet");
       if (!cancelled) {
         setLeaflet({
