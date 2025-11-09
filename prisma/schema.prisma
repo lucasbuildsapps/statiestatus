@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Status {
+  WORKING
+  ISSUES
+  OUT_OF_ORDER
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  name      String
+  retailer  String
+  lat       Float
+  lng       Float
+  address   String
+  city      String
+  createdAt DateTime @default(now())
+  reports   Report[]
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  locationId String
+  status     Status
+  note       String   // length limit will be enforced in the API layer (Zod)
+  ipHash     String
+  createdAt  DateTime @default(now())
+
+  @@index([locationId, createdAt])
+}
