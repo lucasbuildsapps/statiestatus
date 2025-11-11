@@ -1,3 +1,4 @@
+// components/MapView.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -93,8 +94,8 @@ export default function MapView() {
 
   if (loadingMap || !leaflet) {
     return (
-      <div className="w-full h-[70vh] rounded-2xl overflow-hidden shadow grid place-items-center">
-        <span className="text-sm text-gray-500">Loading map…</span>
+      <div className="w-full h-[70vh] grid place-items-center">
+        <span className="text-sm text-gray-500">Kaart laden…</span>
       </div>
     );
   }
@@ -103,8 +104,13 @@ export default function MapView() {
 
   return (
     <div className="w-full">
-      <div className="w-full h-[70vh] rounded-2xl overflow-hidden shadow">
-        <MapContainer center={center} zoom={12} scrollWheelZoom className="w-full h-full">
+      <div className="w-full h-[70vh]">
+        <MapContainer
+          center={center}
+          zoom={12}
+          scrollWheelZoom
+          className="w-full h-full"
+        >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap"
@@ -124,7 +130,7 @@ export default function MapView() {
             >
               <Popup>
                 <div className="space-y-2">
-                  <div className="font-semibold">{l.name}</div>
+                  <div className="font-medium">{l.name}</div>
                   <div className="text-sm text-gray-600">
                     {l.retailer} – {l.address}, {l.city}
                   </div>
@@ -132,13 +138,13 @@ export default function MapView() {
                   <div className="flex items-center gap-2">
                     <StatusBadge status={l.currentStatus} />
                     <span className="text-xs text-gray-500">
-                      {l.lastReportAt ? `Last report ${timeAgo(l.lastReportAt)}` : "No reports yet"}
+                      {l.lastReportAt ? `Laatste melding ${timeAgo(l.lastReportAt)}` : "Nog geen meldingen"}
                     </span>
                   </div>
 
                   {l.lastReports && l.lastReports.length > 0 && (
-                    <div className="rounded border p-2 text-xs space-y-1">
-                      <div className="font-medium">Recent reports</div>
+                    <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
+                      <div className="font-medium">Recente meldingen</div>
                       <ul className="space-y-1">
                         {l.lastReports.map((r) => (
                           <li key={r.id} className="flex items-start gap-2">
@@ -184,16 +190,16 @@ function StatusBadge({
   const label = status ?? "Unknown";
   const color =
     status === "WORKING"
-      ? "bg-green-100 text-green-800"
+      ? "bg-emerald-100 text-emerald-800"
       : status === "ISSUES"
-      ? "bg-yellow-100 text-yellow-800"
+      ? "bg-amber-100 text-amber-800"
       : status === "OUT_OF_ORDER"
       ? "bg-red-100 text-red-800"
       : "bg-gray-100 text-gray-800";
   return (
-    <div className={`inline-block text-xs px-2 py-1 rounded ${color}`}>
+    <span className={`inline-block text-xs px-2 py-1 rounded ${color}`}>
       Status: <b>{label}</b>
-    </div>
+    </span>
   );
 }
 
@@ -214,14 +220,14 @@ function StatusDot({
 
 function Legend() {
   const items: Array<{ label: string; color: string }> = [
-    { label: "Working",      color: colorForStatus("WORKING") },
-    { label: "Issues",       color: colorForStatus("ISSUES") },
-    { label: "Out of order", color: colorForStatus("OUT_OF_ORDER") },
-    { label: "Unknown",      color: colorForStatus(null) },
+    { label: "Werkend",      color: colorForStatus("WORKING") },
+    { label: "Problemen",    color: colorForStatus("ISSUES") },
+    { label: "Stuk",         color: colorForStatus("OUT_OF_ORDER") },
+    { label: "Onbekend",     color: colorForStatus(null) },
   ];
 
   return (
-    <div className="mt-3 flex flex-wrap gap-3 text-xs">
+    <div className="mt-3 flex flex-wrap gap-3 text-xs px-3 pb-3">
       {items.map((it) => (
         <div key={it.label} className="flex items-center gap-2">
           <span
@@ -230,7 +236,7 @@ function Legend() {
               width: 12,
               height: 12,
               background: it.color,
-              boxShadow: "0 0 0 2px rgba(0,0,0,0.08)",
+              boxShadow: "0 0 0 2px rgba(0,0,0,0.06)",
             }}
           />
           <span className="text-gray-700">{it.label}</span>
@@ -268,15 +274,15 @@ function ReportForm({
 
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data?.error || "Something went wrong");
+        setMsg(data?.error || "Er ging iets mis");
         return;
       }
 
-      setMsg("✅ Thanks! Report submitted.");
+      setMsg("✅ Bedankt! Melding verstuurd.");
       setNote("");
       if (onSuccess) await onSuccess();
     } catch {
-      setMsg("Network error");
+      setMsg("Netwerkfout");
     } finally {
       setLoading(false);
     }
@@ -289,27 +295,27 @@ function ReportForm({
         onChange={(e) =>
           setStatus(e.target.value as "WORKING" | "ISSUES" | "OUT_OF_ORDER")
         }
-        className="border rounded px-2 py-1 w-full"
+        className="border rounded-lg px-2 py-1 w-full"
       >
-        <option value="WORKING">✅ Working</option>
-        <option value="ISSUES">⚠️ Issues (slow/jammed)</option>
-        <option value="OUT_OF_ORDER">❌ Out of order</option>
+        <option value="WORKING">✅ Werkend</option>
+        <option value="ISSUES">⚠️ Problemen (traag/loopt vast)</option>
+        <option value="OUT_OF_ORDER">❌ Stuk</option>
       </select>
 
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="Optional note (max 280)"
-        className="border rounded px-2 py-1 w-full"
+        placeholder="Optionele notitie (max 280)"
+        className="border rounded-lg px-2 py-1 w-full"
         maxLength={280}
       />
 
       <button
         type="submit"
         disabled={loading}
-        className="bg-black text-white px-3 py-1 rounded w-full"
+        className="bg-black text-white px-3 py-1.5 rounded-lg w-full"
       >
-        {loading ? "Sending..." : "Submit report"}
+        {loading ? "Versturen…" : "Melding plaatsen"}
       </button>
 
       {msg && <div className="text-xs pt-1">{msg}</div>}

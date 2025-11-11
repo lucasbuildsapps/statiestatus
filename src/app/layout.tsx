@@ -1,4 +1,5 @@
-import 'leaflet/dist/leaflet.css';
+// app/layout.tsx
+import "leaflet/dist/leaflet.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -18,17 +19,14 @@ export const metadata: Metadata = {
   description: "Check en rapporteer de status van statiegeldmachines.",
 };
 
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="nl">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>
