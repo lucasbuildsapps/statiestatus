@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import type { Map as LMap, CircleMarker as LCircleMarker } from "leaflet";
 
 type LeafletAPI = {
   MapContainer: any;
@@ -9,8 +10,6 @@ type LeafletAPI = {
   Popup: any;
   CircleMarker: any;
 };
-type LeafletMap = any;
-type LeafletCircle = any;
 
 type LastReport = {
   id: string;
@@ -55,7 +54,7 @@ function timeAgo(iso?: string | null) {
 
 export default function MapView() {
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
-  const [map, setMap] = useState<LeafletMap | null>(null);
+  const [map, setMap] = useState<LMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loadingMap, setLoadingMap] = useState(true);
 
@@ -66,7 +65,7 @@ export default function MapView() {
   const toastTimer = useRef<number | null>(null);
 
   // marker refs for opening popups programmatically
-  const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
+  const markerRefs = useRef<Record<string, LCircleMarker | null>>({});
 
   const fetchLocations = useCallback(async () => {
     try {
@@ -123,14 +122,19 @@ export default function MapView() {
   function flyAndOpen(l: LocationItem) {
     if (!map) return;
     map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
-    // open popup if we have the ref
-    const ref = markerRefs.current[l.id];
+
+    const layer = markerRefs.current[l.id];
+    // `openPopup` exists at runtime on Leaflet layers with a Popup bound; typings are conservative
     try {
-      ref?.openPopup?.();
-    } catch {}
-    // highlight
+      (layer as unknown as { openPopup?: () => void })?.openPopup?.();
+    } catch {
+      /* no-op */
+    }
+
     setHighlightId(l.id);
-    window.setTimeout(() => setHighlightId((id) => (id === l.id ? null : id)), 1500);
+    window.setTimeout(() => {
+      setHighlightId((id) => (id === l.id ? null : id));
+    }, 1500);
   }
 
   if (loadingMap || !leaflet) {
@@ -186,7 +190,7 @@ export default function MapView() {
           zoom={12}
           scrollWheelZoom
           className="w-full h-full"
-          whenCreated={(m: any) => setMap(m)}
+          whenCreated={(m: LMap) => setMap(m)}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -198,8 +202,8 @@ export default function MapView() {
               key={l.id}
               center={[l.lat, l.lng]}
               radius={highlightId === l.id ? 12 : 10}
-              ref={(instance) => {
-                markerRefs.current[l.id] = instance as unknown as LeafletCircle;
+              ref={(instance: LCircleMarker | null) => {
+                markerRefs.current[l.id] = instance;
               }}
               pathOptions={{
                 color: colorForStatus(l.currentStatus),
