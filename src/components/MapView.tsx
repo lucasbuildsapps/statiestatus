@@ -1,14 +1,16 @@
 // components/MapView.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 type LeafletAPI = {
   MapContainer: any;
   TileLayer: any;
   Popup: any;
   CircleMarker: any;
+  useMap?: any;
 };
+type LeafletMap = any;
 
 type LastReport = {
   id: string;
@@ -42,19 +44,25 @@ function timeAgo(iso?: string | null) {
   const then = new Date(iso).getTime();
   const now = Date.now();
   const s = Math.max(1, Math.floor((now - then) / 1000));
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) return `${s}s geleden`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}m geleden`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}h geleden`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d}d geleden`;
 }
 
 export default function MapView() {
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
+  const [map, setMap] = useState<LeafletMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loadingMap, setLoadingMap] = useState(true);
+
+  // search state
+  const [q, setQ] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
 
   const fetchLocations = useCallback(async () => {
     try {
@@ -81,6 +89,7 @@ export default function MapView() {
           TileLayer: rl.TileLayer,
           Popup: rl.Popup,
           CircleMarker: rl.CircleMarker,
+          useMap: (rl as any).useMap,
         });
         setLoadingMap(false);
       }
@@ -91,6 +100,28 @@ export default function MapView() {
   }, []);
 
   const center: [number, number] = [52.3676, 4.9041]; // Amsterdam
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return locations;
+    return locations.filter((l) =>
+      [l.name, l.retailer, l.address, l.city].some((s) =>
+        String(s).toLowerCase().includes(term)
+      )
+    );
+  }, [locations, q]);
+
+  // helper to show toast messages
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function flyTo(l: LocationItem) {
+    if (!map) return;
+    map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
+  }
 
   if (loadingMap || !leaflet) {
     return (
@@ -103,13 +134,49 @@ export default function MapView() {
   const { MapContainer, TileLayer, Popup, CircleMarker } = leaflet;
 
   return (
-    <div className="w-full">
+    <div className="relative">
+      {/* Search bar */}
+      <div className="absolute left-3 top-3 z-[1000]">
+        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Zoek op naam, winkel, stad…"
+            className="w-full text-sm px-2 py-1 border rounded-lg"
+          />
+          {q && (
+            <ul className="max-h-52 overflow-auto mt-2 divide-y border rounded-lg bg-white">
+              {filtered.slice(0, 8).map((l) => (
+                <li
+                  key={l.id}
+                  className="p-2 text-sm cursor-pointer hover:bg-gray-50"
+                  onClick={() => {
+                    flyTo(l);
+                    setQ(""); // close results
+                  }}
+                  title={`${l.name} • ${l.retailer} • ${l.city}`}
+                >
+                  <div className="font-medium">{l.name}</div>
+                  <div className="text-xs text-gray-600">
+                    {l.retailer} — {l.city}
+                  </div>
+                </li>
+              ))}
+              {filtered.length === 0 && (
+                <li className="p-2 text-xs text-gray-500">Geen resultaten</li>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <div className="w-full h-[70vh]">
         <MapContainer
           center={center}
           zoom={12}
           scrollWheelZoom
           className="w-full h-full"
+          whenCreated={(m: any) => setMap(m)}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -166,6 +233,7 @@ export default function MapView() {
                     locationId={l.id}
                     onSuccess={async () => {
                       await fetchLocations();
+                      showToast("✅ Bedankt! Melding geplaatst.");
                     }}
                   />
                 </div>
@@ -176,6 +244,15 @@ export default function MapView() {
       </div>
 
       <Legend />
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-[1100]">
+          <div className="rounded-xl bg-black text-white text-sm px-3 py-2 shadow-lg">
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -278,7 +355,7 @@ function ReportForm({
         return;
       }
 
-      setMsg("✅ Bedankt! Melding verstuurd.");
+      setMsg("✅ Melding geplaatst.");
       setNote("");
       if (onSuccess) await onSuccess();
     } catch {
