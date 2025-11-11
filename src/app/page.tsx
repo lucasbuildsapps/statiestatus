@@ -3,6 +3,7 @@ import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import ContactForm from "../components/ContactForm";
+import PrivacyNote from "../components/PrivacyNote";
 
 export default function Page() {
   return (
@@ -17,6 +18,9 @@ export default function Page() {
           </p>
           <p className="text-xs text-gray-500">Laatste update: real-time uit community meldingen</p>
         </header>
+
+        {/* ✅ Privacy banner */}
+        <PrivacyNote />
 
         <section id="kaart" className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <MapClient />
