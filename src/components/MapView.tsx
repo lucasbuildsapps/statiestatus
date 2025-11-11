@@ -8,9 +8,9 @@ type LeafletAPI = {
   TileLayer: any;
   Popup: any;
   CircleMarker: any;
-  useMap?: any;
 };
 type LeafletMap = any;
+type LeafletCircle = any;
 
 type LastReport = {
   id: string;
@@ -33,10 +33,10 @@ type LocationItem = {
 };
 
 function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
-  if (s === "WORKING") return "#10b981";      // green
-  if (s === "ISSUES") return "#f59e0b";       // amber
-  if (s === "OUT_OF_ORDER") return "#ef4444"; // red
-  return "#9ca3af";                            // gray (unknown)
+  if (s === "WORKING") return "#10b981";
+  if (s === "ISSUES") return "#f59e0b";
+  if (s === "OUT_OF_ORDER") return "#ef4444";
+  return "#9ca3af";
 }
 
 function timeAgo(iso?: string | null) {
@@ -59,10 +59,14 @@ export default function MapView() {
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loadingMap, setLoadingMap] = useState(true);
 
-  // search state
+  // search + toast + highlight
   const [q, setQ] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
+
+  // marker refs for opening popups programmatically
+  const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
   const fetchLocations = useCallback(async () => {
     try {
@@ -89,7 +93,6 @@ export default function MapView() {
           TileLayer: rl.TileLayer,
           Popup: rl.Popup,
           CircleMarker: rl.CircleMarker,
-          useMap: (rl as any).useMap,
         });
         setLoadingMap(false);
       }
@@ -111,16 +114,23 @@ export default function MapView() {
     );
   }, [locations, q]);
 
-  // helper to show toast messages
   function showToast(msg: string) {
     setToast(msg);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
   }
 
-  function flyTo(l: LocationItem) {
+  function flyAndOpen(l: LocationItem) {
     if (!map) return;
     map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
+    // open popup if we have the ref
+    const ref = markerRefs.current[l.id];
+    try {
+      ref?.openPopup?.();
+    } catch {}
+    // highlight
+    setHighlightId(l.id);
+    window.setTimeout(() => setHighlightId((id) => (id === l.id ? null : id)), 1500);
   }
 
   if (loadingMap || !leaflet) {
@@ -151,8 +161,8 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    flyTo(l);
-                    setQ(""); // close results
+                    flyAndOpen(l);
+                    setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
                 >
@@ -187,12 +197,18 @@ export default function MapView() {
             <CircleMarker
               key={l.id}
               center={[l.lat, l.lng]}
-              radius={10}
+              radius={highlightId === l.id ? 12 : 10}
+              ref={(instance) => {
+                markerRefs.current[l.id] = instance as unknown as LeafletCircle;
+              }}
               pathOptions={{
                 color: colorForStatus(l.currentStatus),
                 fillColor: colorForStatus(l.currentStatus),
-                fillOpacity: 0.9,
-                weight: 2,
+                fillOpacity: 0.95,
+                weight: highlightId === l.id ? 3 : 2,
+              }}
+              eventHandlers={{
+                click: () => flyAndOpen(l),
               }}
             >
               <Popup>
@@ -280,11 +296,7 @@ function StatusBadge({
   );
 }
 
-function StatusDot({
-  status,
-}: {
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
-}) {
+function StatusDot({ status }: { status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" }) {
   const color = colorForStatus(status);
   return (
     <span
@@ -297,10 +309,10 @@ function StatusDot({
 
 function Legend() {
   const items: Array<{ label: string; color: string }> = [
-    { label: "Werkend",      color: colorForStatus("WORKING") },
-    { label: "Problemen",    color: colorForStatus("ISSUES") },
-    { label: "Stuk",         color: colorForStatus("OUT_OF_ORDER") },
-    { label: "Onbekend",     color: colorForStatus(null) },
+    { label: "Werkend", color: colorForStatus("WORKING") },
+    { label: "Problemen", color: colorForStatus("ISSUES") },
+    { label: "Stuk", color: colorForStatus("OUT_OF_ORDER") },
+    { label: "Onbekend", color: colorForStatus(null) },
   ];
 
   return (
