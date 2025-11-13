@@ -1,28 +1,33 @@
-// components/NavBar.tsx
-"use client";
-import Logo from "./Logo";
+// app/layout.tsx
+import "leaflet/dist/leaflet.css";
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
 
-export default function NavBar() {
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "statiestatus.nl",
+  description: "Check en rapporteer de status van statiegeldmachines.",
+  icons: {
+    icon: "/favicon.svg", // ✅ use bottle logo
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b">
-      <nav className="max-w-4xl mx-auto flex items-center justify-between p-3">
-        <a href="/" className="flex items-center gap-2">
-          <Logo />
-        </a>
-        <div className="flex items-center gap-4 text-sm">
-          <a href="#kaart" className="hover:underline">Kaart</a>
-          <a href="#nearby" className="hover:underline">In de buurt</a>
-          <a href="#about" className="hover:underline">Over</a>
-          <a href="#contact" className="hover:underline">Contact</a>
-          <a
-            href="#kaart"
-            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
-            title="Plaats een melding"
-          >
-            Melden
-          </a>
-        </div>
-      </nav>
-    </div>
+    <html lang="nl">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
+    </html>
   );
 }

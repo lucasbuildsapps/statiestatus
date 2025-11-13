@@ -4,6 +4,7 @@ import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import ContactForm from "../components/ContactForm";
 import PrivacyNote from "../components/PrivacyNote";
+import AddMachineForm from "../components/AddMachineForm";
 
 export default function Page() {
   return (
@@ -12,25 +13,49 @@ export default function Page() {
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">
         <header className="space-y-2 text-center">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">statiestatus.nl</h1>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            statiestatus.nl
+          </h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
             Controleer of een statiegeldmachine werkt en help anderen door de status te rapporteren.
           </p>
-          <p className="text-xs text-gray-500">Laatste update: real-time uit community meldingen</p>
+          <p className="text-xs text-gray-500">
+            Laatste update: real-time uit community meldingen
+          </p>
         </header>
 
-        {/* ✅ Privacy banner */}
         <PrivacyNote />
 
-        <section id="kaart" className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+        <section
+          id="kaart"
+          className="rounded-2xl border bg-white shadow-sm overflow-hidden"
+        >
           <MapClient />
         </section>
 
-        <section id="nearby" className="rounded-2xl border bg-white shadow-sm p-4">
+        <section
+          id="nearby"
+          className="rounded-2xl border bg-white shadow-sm p-4"
+        >
           <NearbyList />
         </section>
 
-        <section id="about" className="rounded-2xl border bg-white shadow-sm p-6 space-y-3">
+        <section
+          id="add-machine"
+          className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
+        >
+          <h2 className="text-lg font-semibold">Mist er een machine?</h2>
+          <p className="text-sm text-gray-700">
+            Zie je een statiegeldmachine die nog niet op de kaart staat? Stuur de gegevens in
+            en we voegen hem zo snel mogelijk toe.
+          </p>
+          <AddMachineForm />
+        </section>
+
+        <section
+          id="about"
+          className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
+        >
           <h2 className="text-lg font-semibold">Over dit project</h2>
           <p className="text-sm text-gray-700 max-w-2xl">
             Deze site helpt mensen snel te zien of een statiegeldmachine werkt. Meldingen komen van de
@@ -43,7 +68,10 @@ export default function Page() {
           </ul>
         </section>
 
-        <section id="contact" className="rounded-2xl border bg-white shadow-sm p-6 space-y-3">
+        <section
+          id="contact"
+          className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
+        >
           <h2 className="text-lg font-semibold">Contact</h2>
           <p className="text-sm text-gray-700">Heb je een suggestie of foutmelding?</p>
           <ContactForm />
