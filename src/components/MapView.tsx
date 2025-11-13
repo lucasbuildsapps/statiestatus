@@ -1,8 +1,9 @@
 // src/components/MapView.tsx
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Map as LMap } from "leaflet";
+import { useSearchParams } from "next/navigation";
 import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
@@ -31,11 +32,12 @@ type LocationItem = {
   currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
   lastReportAt?: string | null;
   lastReports?: LastReport[];
+  totalReports?: number;
 };
 
 function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
   if (s === "WORKING") return "#22c55e"; // bright green
-  if (s === "ISSUES") return "#eab308"; // strong amber
+  if (s === "ISSUES") return "#eab308";  // strong amber
   if (s === "OUT_OF_ORDER") return "#ef4444"; // red
   return "#9ca3af"; // gray
 }
@@ -54,16 +56,34 @@ function timeAgo(iso?: string | null) {
   return `${d}d geleden`;
 }
 
+function confidenceText(total?: number) {
+  if (!total || total < 1) return "Nog weinig meldingen (lage betrouwbaarheid).";
+  if (total < 5) return `Enkele meldingen (${total}).`;
+  return `Betrouwbare status (${total}+ meldingen).`;
+}
+
 export default function MapView() {
+  const searchParams = useSearchParams();
+
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
   const [map, setMap] = useState<LMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loadingMap, setLoadingMap] = useState(true);
 
-  // search + toast + highlight
+  // search + filters + feedback
   const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "ALL" | "WORKING" | "ISSUES" | "OUT_OF_ORDER"
+  >("ALL");
   const [toast, setToast] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+
+  // user location
+  const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [centeredOnUser, setCenteredOnUser] = useState(false);
+
+  // deep-link
+  const [handledSharedLocation, setHandledSharedLocation] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -81,7 +101,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
-  // dynamic import of react-leaflet + useMap
+  // dynamic import react-leaflet + useMap
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -103,17 +123,37 @@ export default function MapView() {
     };
   }, []);
 
-  const center: [number, number] = [52.3676, 4.9041]; // Amsterdam
+  // get user location
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, []);
+
+  const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
+
+  const visibleLocations = useMemo(() => {
+    let list = locations;
+    if (statusFilter !== "ALL") {
+      list = list.filter((l) => l.currentStatus === statusFilter);
+    }
+    return list;
+  }, [locations, statusFilter]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return locations;
-    return locations.filter((l) =>
+    if (!term) return visibleLocations;
+    return visibleLocations.filter((l) =>
       [l.name, l.retailer, l.address, l.city].some((s) =>
         String(s).toLowerCase().includes(term)
       )
     );
-  }, [locations, q]);
+  }, [visibleLocations, q]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -130,7 +170,40 @@ export default function MapView() {
     );
   }
 
-  if (loadingMap || !leaflet) {
+  function shareLocation(l: LocationItem) {
+    const url = `${window.location.origin}/?location=${encodeURIComponent(
+      l.id
+    )}`;
+    if (navigator.share) {
+      navigator
+        .share({ title: "statiestatus.nl", text: l.name, url })
+        .catch(() => {});
+      return;
+    }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(() => showToast("Link gekopieerd 🌐"))
+        .catch(() => {});
+      return;
+    }
+    window.prompt("Kopieer deze link:", url);
+  }
+
+  const sharedLocationId = searchParams.get("location");
+
+  // If opened with ?location=ID, zoom to that machine once everything is ready
+  useEffect(() => {
+    if (!map) return;
+    if (!sharedLocationId) return;
+    if (handledSharedLocation) return;
+    const l = locations.find((loc) => loc.id === sharedLocationId);
+    if (!l) return;
+    flyToLocation(l);
+    setHandledSharedLocation(true);
+  }, [map, sharedLocationId, handledSharedLocation, locations]);
+
+  if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[70vh] grid place-items-center">
         <span className="text-sm text-gray-500">Kaart laden…</span>
@@ -140,26 +213,62 @@ export default function MapView() {
 
   const { MapContainer, TileLayer, Popup, CircleMarker, useMap } = leaflet;
 
-  // small inner component to capture the Leaflet map instance
+  // internal: capture map instance + center on user once
   function MapController() {
-    const mapInstance = useMap();
+    const m = useMap();
     useEffect(() => {
-      setMap(mapInstance);
-    }, [mapInstance]);
+      setMap(m);
+    }, [m]);
+
+    useEffect(() => {
+      if (m && pos && !centeredOnUser && !sharedLocationId) {
+        m.setView([pos.lat, pos.lng], 14);
+        setCenteredOnUser(true);
+      }
+    }, [m, pos, centeredOnUser, sharedLocationId]);
+
     return null;
   }
 
   return (
     <div className="relative">
-      {/* Search bar */}
-      <div className="absolute left-3 top-3 z-[1000]">
-        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
+      {/* Search + status filters */}
+      <div className="absolute left-16 top-3 z-[1000]">
+        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Zoek op naam, winkel, stad…"
             className="w-full text-sm px-2 py-1 border rounded-lg"
           />
+          <div className="flex flex-wrap gap-1 mt-2 text-[11px]">
+            {[
+              { id: "ALL", label: "Alle" },
+              { id: "WORKING", label: "Werkend" },
+              { id: "ISSUES", label: "Problemen" },
+              { id: "OUT_OF_ORDER", label: "Stuk" },
+            ].map((btn) => {
+              const active = statusFilter === btn.id;
+              return (
+                <button
+                  key={btn.id}
+                  type="button"
+                  onClick={() =>
+                    setStatusFilter(btn.id as typeof statusFilter)
+                  }
+                  className={
+                    "px-2 py-0.5 rounded-full border " +
+                    (active
+                      ? "bg-black text-white border-black"
+                      : "bg-white text-gray-700 hover:bg-gray-50")
+                  }
+                >
+                  {btn.label}
+                </button>
+              );
+            })}
+          </div>
+
           {q && (
             <ul className="max-h-52 overflow-auto mt-2 divide-y border rounded-lg bg-white">
               {filtered.slice(0, 8).map((l) => (
@@ -188,12 +297,11 @@ export default function MapView() {
 
       <div className="w-full h-[70vh]">
         <MapContainer
-          center={center}
+          center={defaultCenter}
           zoom={12}
           scrollWheelZoom
           className="w-full h-full"
         >
-          {/* ✅ This captures the Leaflet map instance and stores it in state */}
           <MapController />
 
           <TileLayer
@@ -201,13 +309,27 @@ export default function MapView() {
             attribution="&copy; OpenStreetMap"
           />
 
-          {locations.map((l) => (
+          {/* User location dot */}
+          {pos && (
+            <CircleMarker
+              center={[pos.lat, pos.lng]}
+              radius={6}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 2,
+                fillColor: "#2563eb",
+                fillOpacity: 0.95,
+              }}
+            />
+          )}
+
+          {visibleLocations.map((l) => (
             <CircleMarker
               key={l.id}
               center={[l.lat, l.lng]}
-              radius={highlightId === l.id ? 10 : 7} // smaller + highlight bump
+              radius={highlightId === l.id ? 10 : 7}
               pathOptions={{
-                color: "#ffffff", // white outline for dark + light backgrounds
+                color: "#ffffff", // white outline, good in dark mode
                 weight: highlightId === l.id ? 3 : 2,
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
@@ -225,13 +347,22 @@ export default function MapView() {
                         {l.retailer} – {l.address}, {l.city}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggleFavorite(l.id)}
-                      className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                    >
-                      {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
-                    </button>
+                    <div className="flex flex-col gap-1 items-end">
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(l.id)}
+                        className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                      >
+                        {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => shareLocation(l)}
+                        className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                      >
+                        Deel link
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -242,6 +373,12 @@ export default function MapView() {
                         : "Nog geen meldingen"}
                     </span>
                   </div>
+
+                  {typeof l.totalReports === "number" && (
+                    <div className="text-xs text-gray-500">
+                      {confidenceText(l.totalReports)}
+                    </div>
+                  )}
 
                   {l.lastReports && l.lastReports.length > 0 && (
                     <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
@@ -430,7 +567,7 @@ function ReportForm({
       <button
         type="submit"
         disabled={loading}
-        className="bg-black text-white px-3 py-1.5 rounded-lg w-full"
+        className="bg.black bg-black text-white px-3 py-1.5 rounded-lg w-full"
       >
         {loading ? "Versturen…" : "Melding plaatsen"}
       </button>
