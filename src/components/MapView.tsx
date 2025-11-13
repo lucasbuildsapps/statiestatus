@@ -3,7 +3,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Map as LMap } from "leaflet";
-import { useSearchParams } from "next/navigation";
 import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
@@ -63,8 +62,6 @@ function confidenceText(total?: number) {
 }
 
 export default function MapView() {
-  const searchParams = useSearchParams();
-
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
   const [map, setMap] = useState<LMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -79,6 +76,8 @@ export default function MapView() {
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [centeredOnUser, setCenteredOnUser] = useState(false);
+
+  const [sharedLocationId, setSharedLocationId] = useState<string | null>(null);
   const [handledSharedLocation, setHandledSharedLocation] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -97,6 +96,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
+  // dynamic import react-leaflet
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,6 +118,7 @@ export default function MapView() {
     };
   }, []);
 
+  // user location
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -127,6 +128,14 @@ export default function MapView() {
       () => {},
       { enableHighAccuracy: true, timeout: 8000 }
     );
+  }, []);
+
+  // read ?location=... from URL (client-side only)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("location");
+    if (id) setSharedLocationId(id);
   }, []);
 
   const defaultCenter: [number, number] = [52.3676, 4.9041];
@@ -184,8 +193,7 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  const sharedLocationId = searchParams.get("location");
-
+  // fly to shared location once map + locations are ready
   useEffect(() => {
     if (!map) return;
     if (!sharedLocationId) return;
@@ -251,7 +259,7 @@ export default function MapView() {
                   className={
                     "px-2 py-0.5 rounded-full border " +
                     (active
-                      ? "bg-black text-white border-black"
+                      ? "bg-black text.white text-white border-black"
                       : "bg-white text-gray-700 hover:bg-gray-50")
                   }
                 >
@@ -301,7 +309,7 @@ export default function MapView() {
             attribution="&copy; OpenStreetMap"
           />
 
-          {/* User location */}
+          {/* user location */}
           {pos && (
             <CircleMarker
               center={[pos.lat, pos.lng]}
