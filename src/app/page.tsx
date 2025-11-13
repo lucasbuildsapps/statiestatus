@@ -1,6 +1,4 @@
-// src/app/page.tsx
-"use client";
-
+// app/page.tsx
 import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
@@ -19,8 +17,7 @@ export default function Page() {
             statiestatus.nl
           </h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Controleer of een statiegeldmachine werkt en help anderen door de
-            status te rapporteren.
+            Controleer of een statiegeldmachine werkt en help anderen door de status te rapporteren.
           </p>
           <p className="text-xs text-gray-500">
             Laatste update: real-time uit community meldingen
@@ -49,8 +46,8 @@ export default function Page() {
         >
           <h2 className="text-lg font-semibold">Mist er een machine?</h2>
           <p className="text-sm text-gray-700">
-            Zie je een statiegeldmachine die nog niet op de kaart staat? Stuur
-            de gegevens in en we voegen hem zo snel mogelijk toe.
+            Zie je een statiegeldmachine die nog niet op de kaart staat? Stuur de gegevens in
+            en we voegen hem zo snel mogelijk toe.
           </p>
           <AddMachineForm />
         </section>
@@ -61,9 +58,8 @@ export default function Page() {
         >
           <h2 className="text-lg font-semibold">Over dit project</h2>
           <p className="text-sm text-gray-700 max-w-2xl">
-            Deze site helpt mensen snel te zien of een statiegeldmachine werkt.
-            Meldingen komen van de community. Zo bespaar je tijd en frustratie
-            in de winkel.
+            Deze site helpt mensen snel te zien of een statiegeldmachine werkt. Meldingen komen van de
+            community. Zo bespaar je tijd en frustratie in de winkel.
           </p>
           <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
             <li>Open source mindset — verbeteringen welkom.</li>
@@ -77,9 +73,7 @@ export default function Page() {
           className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
         >
           <h2 className="text-lg font-semibold">Contact</h2>
-          <p className="text-sm text-gray-700">
-            Heb je een suggestie of foutmelding?
-          </p>
+          <p className="text-sm text-gray-700">Heb je een suggestie of foutmelding?</p>
           <ContactForm />
         </section>
 
