@@ -1,14 +1,16 @@
-// components/MapView.tsx
+// src/components/MapView.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import type { Map as LMap, CircleMarker as LCircleMarker } from "leaflet";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import type { Map as LMap } from "leaflet";
+import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
   MapContainer: any;
   TileLayer: any;
   Popup: any;
   CircleMarker: any;
+  useMap: any;
 };
 
 type LastReport = {
@@ -32,10 +34,10 @@ type LocationItem = {
 };
 
 function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
-  if (s === "WORKING") return "#10b981";
-  if (s === "ISSUES") return "#f59e0b";
-  if (s === "OUT_OF_ORDER") return "#ef4444";
-  return "#9ca3af";
+  if (s === "WORKING") return "#22c55e"; // bright green
+  if (s === "ISSUES") return "#eab308"; // strong amber
+  if (s === "OUT_OF_ORDER") return "#ef4444"; // red
+  return "#9ca3af"; // gray
 }
 
 function timeAgo(iso?: string | null) {
@@ -62,10 +64,8 @@ export default function MapView() {
   const [q, setQ] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const toastTimer = useRef<number | null>(null);
 
-  // marker refs for opening popups programmatically
-  const markerRefs = useRef<Record<string, LCircleMarker | null>>({});
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const fetchLocations = useCallback(async () => {
     try {
@@ -81,6 +81,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
+  // dynamic import of react-leaflet + useMap
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -92,6 +93,7 @@ export default function MapView() {
           TileLayer: rl.TileLayer,
           Popup: rl.Popup,
           CircleMarker: rl.CircleMarker,
+          useMap: (rl as any).useMap,
         });
         setLoadingMap(false);
       }
@@ -115,26 +117,17 @@ export default function MapView() {
 
   function showToast(msg: string) {
     setToast(msg);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2600);
+    window.setTimeout(() => setToast(null), 2600);
   }
 
-  function flyAndOpen(l: LocationItem) {
+  function flyToLocation(l: LocationItem) {
     if (!map) return;
     map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
-
-    const layer = markerRefs.current[l.id];
-    // `openPopup` exists at runtime on Leaflet layers with a Popup bound; typings are conservative
-    try {
-      (layer as unknown as { openPopup?: () => void })?.openPopup?.();
-    } catch {
-      /* no-op */
-    }
-
     setHighlightId(l.id);
-    window.setTimeout(() => {
-      setHighlightId((id) => (id === l.id ? null : id));
-    }, 1500);
+    window.setTimeout(
+      () => setHighlightId((id) => (id === l.id ? null : id)),
+      1500
+    );
   }
 
   if (loadingMap || !leaflet) {
@@ -145,7 +138,16 @@ export default function MapView() {
     );
   }
 
-  const { MapContainer, TileLayer, Popup, CircleMarker } = leaflet;
+  const { MapContainer, TileLayer, Popup, CircleMarker, useMap } = leaflet;
+
+  // small inner component to capture the Leaflet map instance
+  function MapController() {
+    const mapInstance = useMap();
+    useEffect(() => {
+      setMap(mapInstance);
+    }, [mapInstance]);
+    return null;
+  }
 
   return (
     <div className="relative">
@@ -165,7 +167,7 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    flyAndOpen(l);
+                    flyToLocation(l);
                     setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
@@ -190,8 +192,10 @@ export default function MapView() {
           zoom={12}
           scrollWheelZoom
           className="w-full h-full"
-          whenCreated={(m: LMap) => setMap(m)}
         >
+          {/* ✅ This captures the Leaflet map instance and stores it in state */}
+          <MapController />
+
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap"
@@ -201,31 +205,41 @@ export default function MapView() {
             <CircleMarker
               key={l.id}
               center={[l.lat, l.lng]}
-              radius={highlightId === l.id ? 12 : 10}
-              ref={(instance: LCircleMarker | null) => {
-                markerRefs.current[l.id] = instance;
-              }}
+              radius={highlightId === l.id ? 10 : 7} // smaller + highlight bump
               pathOptions={{
-                color: colorForStatus(l.currentStatus),
+                color: "#ffffff", // white outline for dark + light backgrounds
+                weight: highlightId === l.id ? 3 : 2,
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
-                weight: highlightId === l.id ? 3 : 2,
               }}
               eventHandlers={{
-                click: () => flyAndOpen(l),
+                click: () => flyToLocation(l),
               }}
             >
               <Popup>
                 <div className="space-y-2">
-                  <div className="font-medium">{l.name}</div>
-                  <div className="text-sm text-gray-600">
-                    {l.retailer} – {l.address}, {l.city}
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{l.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {l.retailer} – {l.address}, {l.city}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFavorite(l.id)}
+                      className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                    >
+                      {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <StatusBadge status={l.currentStatus} />
                     <span className="text-xs text-gray-500">
-                      {l.lastReportAt ? `Laatste melding ${timeAgo(l.lastReportAt)}` : "Nog geen meldingen"}
+                      {l.lastReportAt
+                        ? `Laatste melding ${timeAgo(l.lastReportAt)}`
+                        : "Nog geen meldingen"}
                     </span>
                   </div>
 
@@ -241,7 +255,10 @@ export default function MapView() {
                             <span className="text-gray-700">
                               <b>{r.status.replaceAll("_", " ")}</b>
                               {r.note ? ` — ${r.note}` : ""}
-                              <span className="text-gray-500"> · {timeAgo(r.createdAt)}</span>
+                              <span className="text-gray-500">
+                                {" "}
+                                · {timeAgo(r.createdAt)}
+                              </span>
                             </span>
                           </li>
                         ))}
@@ -287,12 +304,12 @@ function StatusBadge({
   const label = status ?? "Unknown";
   const color =
     status === "WORKING"
-      ? "bg-emerald-100 text-emerald-800"
+      ? "bg-emerald-200 text-emerald-900"
       : status === "ISSUES"
-      ? "bg-amber-100 text-amber-800"
+      ? "bg-amber-200 text-amber-900"
       : status === "OUT_OF_ORDER"
-      ? "bg-red-100 text-red-800"
-      : "bg-gray-100 text-gray-800";
+      ? "bg-red-200 text-red-900"
+      : "bg-gray-200 text-gray-800";
   return (
     <span className={`inline-block text-xs px-2 py-1 rounded ${color}`}>
       Status: <b>{label}</b>
@@ -305,7 +322,12 @@ function StatusDot({ status }: { status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" }
   return (
     <span
       className="inline-block rounded-full"
-      style={{ width: 8, height: 8, background: color }}
+      style={{
+        width: 8,
+        height: 8,
+        background: color,
+        boxShadow: "0 0 0 2px #ffffff",
+      }}
       aria-hidden
     />
   );
@@ -329,7 +351,7 @@ function Legend() {
               width: 12,
               height: 12,
               background: it.color,
-              boxShadow: "0 0 0 2px rgba(0,0,0,0.06)",
+              boxShadow: "0 0 0 2px #ffffff",
             }}
           />
           <span className="text-gray-700">{it.label}</span>
@@ -348,7 +370,9 @@ function ReportForm({
   locationId: string;
   onSuccess?: () => void | Promise<void>;
 }) {
-  const [status, setStatus] = useState<"WORKING" | "ISSUES" | "OUT_OF_ORDER">("WORKING");
+  const [status, setStatus] = useState<"WORKING" | "ISSUES" | "OUT_OF_ORDER">(
+    "WORKING"
+  );
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
