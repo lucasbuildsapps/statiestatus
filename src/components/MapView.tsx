@@ -118,7 +118,7 @@ export default function MapView() {
     };
   }, []);
 
-  // user location
+  // user geolocation
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -130,7 +130,7 @@ export default function MapView() {
     );
   }, []);
 
-  // read ?location=... from URL (client-side only)
+  // read ?location=... from URL (client-side)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -193,7 +193,7 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  // fly to shared location once map + locations are ready
+  // fly to shared location once
   useEffect(() => {
     if (!map) return;
     if (!sharedLocationId) return;
@@ -232,7 +232,7 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters, slightly to the right */}
+      {/* Search + filters, shifted right */}
       <div className="absolute left-16 top-3 z-[900]">
         <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
           <input
@@ -259,7 +259,7 @@ export default function MapView() {
                   className={
                     "px-2 py-0.5 rounded-full border " +
                     (active
-                      ? "bg-black text.white text-white border-black"
+                      ? "bg-black text-white border-black"
                       : "bg-white text-gray-700 hover:bg-gray-50")
                   }
                 >
