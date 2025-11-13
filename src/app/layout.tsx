@@ -1,4 +1,4 @@
-// app/layout.tsx
+// src/app/layout.tsx
 import "leaflet/dist/leaflet.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: "statiestatus.nl",
   description: "Check en rapporteer de status van statiegeldmachines.",
   icons: {
-    icon: "/favicon.svg", // ✅ use bottle logo
+    icon: "/icon.svg", // ✅ points to public/icon.svg
   },
 };
 
