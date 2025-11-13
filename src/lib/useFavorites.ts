@@ -8,7 +8,6 @@ const STORAGE_KEY = "statiestatus_favorites";
 export default function useFavorites() {
   const [favorites, setFavorites] = useState<string[]>([]);
 
-  // Load from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -24,7 +23,6 @@ export default function useFavorites() {
     }
   }, []);
 
-  // Save to localStorage when favorites change
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {

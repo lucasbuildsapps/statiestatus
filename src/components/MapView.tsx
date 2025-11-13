@@ -10,6 +10,7 @@ type LeafletAPI = {
   TileLayer: any;
   Popup: any;
   CircleMarker: any;
+  useMap: any;
 };
 
 type LastReport = {
@@ -33,7 +34,7 @@ type LocationItem = {
 };
 
 function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
-  if (s === "WORKING") return "#22c55e"; // brighter green
+  if (s === "WORKING") return "#22c55e"; // bright green
   if (s === "ISSUES") return "#eab308"; // strong amber
   if (s === "OUT_OF_ORDER") return "#ef4444"; // red
   return "#9ca3af"; // gray
@@ -80,6 +81,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
+  // dynamic import of react-leaflet + useMap
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -91,6 +93,7 @@ export default function MapView() {
           TileLayer: rl.TileLayer,
           Popup: rl.Popup,
           CircleMarker: rl.CircleMarker,
+          useMap: (rl as any).useMap,
         });
         setLoadingMap(false);
       }
@@ -121,9 +124,10 @@ export default function MapView() {
     if (!map) return;
     map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
     setHighlightId(l.id);
-    window.setTimeout(() => {
-      setHighlightId((id) => (id === l.id ? null : id));
-    }, 1500);
+    window.setTimeout(
+      () => setHighlightId((id) => (id === l.id ? null : id)),
+      1500
+    );
   }
 
   if (loadingMap || !leaflet) {
@@ -134,7 +138,16 @@ export default function MapView() {
     );
   }
 
-  const { MapContainer, TileLayer, Popup, CircleMarker } = leaflet;
+  const { MapContainer, TileLayer, Popup, CircleMarker, useMap } = leaflet;
+
+  // small inner component to capture the Leaflet map instance
+  function MapController() {
+    const mapInstance = useMap();
+    useEffect(() => {
+      setMap(mapInstance);
+    }, [mapInstance]);
+    return null;
+  }
 
   return (
     <div className="relative">
@@ -179,8 +192,10 @@ export default function MapView() {
           zoom={12}
           scrollWheelZoom
           className="w-full h-full"
-          whenCreated={(m: LMap) => setMap(m)}
         >
+          {/* ✅ This captures the Leaflet map instance and stores it in state */}
+          <MapController />
+
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap"
@@ -190,10 +205,9 @@ export default function MapView() {
             <CircleMarker
               key={l.id}
               center={[l.lat, l.lng]}
-              // smaller radius to reduce overlap + highlight bump
-              radius={highlightId === l.id ? 10 : 7}
+              radius={highlightId === l.id ? 10 : 7} // smaller + highlight bump
               pathOptions={{
-                color: "#ffffff", // white stroke for contrast (also in dark mode)
+                color: "#ffffff", // white outline for dark + light backgrounds
                 weight: highlightId === l.id ? 3 : 2,
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
@@ -223,7 +237,9 @@ export default function MapView() {
                   <div className="flex items-center gap-2">
                     <StatusBadge status={l.currentStatus} />
                     <span className="text-xs text-gray-500">
-                      {l.lastReportAt ? `Laatste melding ${timeAgo(l.lastReportAt)}` : "Nog geen meldingen"}
+                      {l.lastReportAt
+                        ? `Laatste melding ${timeAgo(l.lastReportAt)}`
+                        : "Nog geen meldingen"}
                     </span>
                   </div>
 
@@ -239,7 +255,10 @@ export default function MapView() {
                             <span className="text-gray-700">
                               <b>{r.status.replaceAll("_", " ")}</b>
                               {r.note ? ` — ${r.note}` : ""}
-                              <span className="text-gray-500"> · {timeAgo(r.createdAt)}</span>
+                              <span className="text-gray-500">
+                                {" "}
+                                · {timeAgo(r.createdAt)}
+                              </span>
                             </span>
                           </li>
                         ))}
@@ -351,7 +370,9 @@ function ReportForm({
   locationId: string;
   onSuccess?: () => void | Promise<void>;
 }) {
-  const [status, setStatus] = useState<"WORKING" | "ISSUES" | "OUT_OF_ORDER">("WORKING");
+  const [status, setStatus] = useState<"WORKING" | "ISSUES" | "OUT_OF_ORDER">(
+    "WORKING"
+  );
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
