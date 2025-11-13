@@ -96,7 +96,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
-  // dynamic import react-leaflet
+  // dynamic import of react-leaflet
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -130,7 +130,7 @@ export default function MapView() {
     );
   }, []);
 
-  // read ?location=... from URL (client-side)
+  // read ?location=... from URL (client-side, no Next hook)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -138,7 +138,7 @@ export default function MapView() {
     if (id) setSharedLocationId(id);
   }, []);
 
-  const defaultCenter: [number, number] = [52.3676, 4.9041];
+  const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
     let list = locations;
@@ -193,7 +193,7 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  // fly to shared location once
+  // fly to shared location once map + locations are ready
   useEffect(() => {
     if (!map) return;
     if (!sharedLocationId) return;
@@ -232,7 +232,7 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters, shifted right */}
+      {/* Search + filters, slightly to the right */}
       <div className="absolute left-16 top-3 z-[900]">
         <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
           <input
@@ -309,7 +309,7 @@ export default function MapView() {
             attribution="&copy; OpenStreetMap"
           />
 
-          {/* user location */}
+          {/* User location */}
           {pos && (
             <CircleMarker
               center={[pos.lat, pos.lng]}
