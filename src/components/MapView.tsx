@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
@@ -88,6 +89,8 @@ export default function MapView() {
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [centeredOnUser, setCenteredOnUser] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -96,7 +99,7 @@ export default function MapView() {
 
   const fetchLocations = useCallback(async () => {
     try {
-      const r = await fetch("/api/locations"); // allow normal caching
+      const r = await fetch("/api/locations");
       const d = await r.json();
       setLocations(Array.isArray(d.locations) ? d.locations : []);
     } catch {
@@ -107,6 +110,25 @@ export default function MapView() {
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
+
+  // compute latest update time for trust indicator
+  useEffect(() => {
+    if (!locations.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const times = locations
+      .map((l) => l.lastReportAt)
+      .filter(Boolean) as string[];
+    if (!times.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const latest = times.reduce((acc, cur) =>
+      new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
+    );
+    setLastUpdatedAt(latest);
+  }, [locations]);
 
   // dynamic import of react-leaflet
   useEffect(() => {
@@ -142,6 +164,21 @@ export default function MapView() {
     );
   }, []);
 
+  // dark mode detection
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setIsDarkMode(mq.matches);
+
+    const handler = (event: MediaQueryListEvent) => {
+      setIsDarkMode(event.matches);
+    };
+
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
@@ -171,7 +208,6 @@ export default function MapView() {
   function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
 
-    // go straight to that point (no weird jump path)
     map.setView([l.lat, l.lng], 16);
 
     setHighlightId(l.id);
@@ -210,7 +246,7 @@ export default function MapView() {
 
   if (!leaflet || loadingMap) {
     return (
-      <div className="w-full h-[70vh] grid place-items-center">
+      <div className="w-full h-[60vh] md:h-[70vh] grid place-items-center">
         <span className="text-sm text-gray-500">Kaart laden…</span>
       </div>
     );
@@ -236,16 +272,27 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters back top-right */}
-      <div className="absolute right-4 top-4 z-[900]">
-        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
+      {/* Search + filters – centered on mobile, right on desktop */}
+      <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0">
+        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-3 w-[92vw] max-w-[360px] sm:w-[280px]">
+          <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+            <span>
+              Laatste update:{" "}
+              {lastUpdatedAt ? timeAgo(lastUpdatedAt) : "nog geen meldingen"}
+            </span>
+            <span className="hidden sm:inline">
+              Locaties: {visibleLocations.length}
+            </span>
+          </div>
+
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Zoek op naam, winkel, stad…"
-            className="w-full text-sm px-2 py-1 border rounded-lg"
+            className="w-full text-sm px-3 py-2 border rounded-lg"
           />
-          <div className="flex flex-wrap gap-1 mt-2 text-[11px]">
+
+          <div className="flex flex-wrap gap-2 mt-2 text-[11px]">
             {[
               { id: "ALL", label: "Alle" },
               { id: "WORKING", label: "Werkend" },
@@ -261,7 +308,7 @@ export default function MapView() {
                     setStatusFilter(btn.id as typeof statusFilter)
                   }
                   className={
-                    "px-2 py-0.5 rounded-full border " +
+                    "px-3 py-1 rounded-full border transition text-xs " +
                     (active
                       ? "bg-black text-white border-black"
                       : "bg-white text-gray-700 hover:bg-gray-50")
@@ -273,6 +320,18 @@ export default function MapView() {
             })}
           </div>
 
+          {pos && map && (
+            <button
+              type="button"
+              onClick={() => {
+                map.setView([pos.lat, pos.lng], 15);
+              }}
+              className="mt-3 w-full text-xs px-3 py-2 rounded-lg border bg-gray-50 hover:bg-gray-100 flex items-center justify-center gap-1"
+            >
+              📍 Inzoomen op mijn locatie
+            </button>
+          )}
+
           {q && (
             <ul className="max-h-52 overflow-auto mt-2 divide-y border rounded-lg bg-white">
               {filtered.slice(0, 8).map((l) => (
@@ -280,7 +339,7 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    focusLocation(l, true); // go there + open popup
+                    focusLocation(l, true);
                     setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
@@ -299,7 +358,7 @@ export default function MapView() {
         </div>
       </div>
 
-      <div className="w-full h-[70vh]">
+      <div className="w-full h-[60vh] md:h-[70vh]">
         <MapContainer
           center={defaultCenter}
           zoom={12}
@@ -317,127 +376,131 @@ export default function MapView() {
           {pos && (
             <CircleMarker
               center={[pos.lat, pos.lng]}
-              radius={6}
+              radius={7}
               pathOptions={{
-                color: "#ffffff",
-                weight: 2,
+                color: isDarkMode ? "#020617" : "#ffffff",
+                weight: 3,
                 fillColor: "#2563eb",
-                fillOpacity: 0.95,
+                fillOpacity: 0.98,
               }}
             />
           )}
 
-          {visibleLocations.map((l) => (
-            <CircleMarker
-              key={l.id}
-              center={[l.lat, l.lng]}
-              radius={highlightId === l.id ? 10 : 7}
-              pathOptions={{
-                color: "#ffffff",
-                weight: highlightId === l.id ? 3 : 2,
-                fillColor: colorForStatus(l.currentStatus),
-                fillOpacity: 0.95,
-              }}
-              ref={(instance: LeafletCircle | null) => {
-                markerRefs.current[l.id] = instance;
-              }}
-              eventHandlers={{
-                click: () => focusLocation(l, true),
-              }}
-            >
-              <Popup>
-                <div className="space-y-3 text-sm">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-base">
-                        {l.name}
-                      </div>
-                      <div className="text-gray-700">
-                        {l.retailer}
-                      </div>
-                      <div className="text-gray-600 text-xs">
-                        {l.address}, {l.city}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 items-end">
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite(l.id)}
-                        className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                      >
-                        {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => shareLocation(l)}
-                        className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                      >
-                        Deel link
-                      </button>
-                    </div>
-                  </div>
+          {visibleLocations.map((l) => {
+            const baseFill = colorForStatus(l.currentStatus);
+            const fillColor =
+              !l.currentStatus && isDarkMode ? "#e5e7eb" : baseFill;
 
-                  {/* Status row */}
-                  <div className="flex items-center justify-between gap-2">
-                    <StatusBadge status={l.currentStatus} />
-                    <div className="text-xs text-gray-500 text-right">
-                      {l.lastReportAt ? (
-                        <>
-                          Laatste melding {timeAgo(l.lastReportAt)}
-                          {typeof l.totalReports === "number" && (
-                            <div>{confidenceText(l.totalReports)}</div>
-                          )}
-                        </>
-                      ) : (
-                        "Nog geen meldingen"
-                      )}
+            return (
+              <CircleMarker
+                key={l.id}
+                center={[l.lat, l.lng]}
+                radius={highlightId === l.id ? 11 : 8}
+                pathOptions={{
+                  color: isDarkMode ? "#020617" : "#ffffff",
+                  weight: highlightId === l.id ? 4 : 3,
+                  fillColor,
+                  fillOpacity: 0.98,
+                }}
+                ref={(instance: LeafletCircle | null) => {
+                  markerRefs.current[l.id] = instance;
+                }}
+                eventHandlers={{
+                  click: () => focusLocation(l, true),
+                }}
+              >
+                <Popup>
+                  <div className="space-y-3 text-sm">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-base">
+                          {l.name}
+                        </div>
+                        <div className="text-gray-700">{l.retailer}</div>
+                        <div className="text-gray-600 text-xs">
+                          {l.address}, {l.city}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 items-end">
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(l.id)}
+                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                        >
+                          {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareLocation(l)}
+                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                        >
+                          Deel link
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Recent reports */}
-                  {l.lastReports && l.lastReports.length > 0 && (
-                    <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
-                      <div className="font-medium">Recente meldingen</div>
-                      <ul className="space-y-1">
-                        {l.lastReports.map((r) => (
-                          <li key={r.id} className="flex items-start gap-2">
-                            <span className="shrink-0 mt-0.5">
-                              <StatusDot status={r.status} />
-                            </span>
-                            <span className="text-gray-700">
-                              <b>{statusLabel(r.status)}</b>
-                              {r.note ? ` — ${r.note}` : ""}
-                              <span className="text-gray-500">
-                                {" "}
-                                · {timeAgo(r.createdAt)}
+                    {/* Status row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <StatusBadge status={l.currentStatus} />
+                      <div className="text-xs text-gray-500 text-right">
+                        {l.lastReportAt ? (
+                          <>
+                            Laatste melding {timeAgo(l.lastReportAt)}
+                            {typeof l.totalReports === "number" && (
+                              <div>{confidenceText(l.totalReports)}</div>
+                            )}
+                          </>
+                        ) : (
+                          "Nog geen meldingen"
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Recent reports */}
+                    {l.lastReports && l.lastReports.length > 0 && (
+                      <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
+                        <div className="font-medium">Recente meldingen</div>
+                        <ul className="space-y-1">
+                          {l.lastReports.map((r) => (
+                            <li key={r.id} className="flex items-start gap-2">
+                              <span className="shrink-0 mt-0.5">
+                                <StatusDot status={r.status} />
                               </span>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                              <span className="text-gray-700">
+                                <b>{statusLabel(r.status)}</b>
+                                {r.note ? ` — ${r.note}` : ""}
+                                <span className="text-gray-500">
+                                  {" "}
+                                  · {timeAgo(r.createdAt)}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
-                  {/* Report form */}
-                  <ReportForm
-                    locationId={l.id}
-                    onSuccess={async () => {
-                      await fetchLocations();
-                      showToast("✅ Bedankt! Melding geplaatst.");
-                    }}
-                  />
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
+                    {/* Report form */}
+                    <ReportForm
+                      locationId={l.id}
+                      onSuccess={async () => {
+                        await fetchLocations();
+                        showToast("✅ Bedankt! Melding geplaatst.");
+                      }}
+                    />
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
         </MapContainer>
       </div>
 
-      <Legend />
+      <Legend isDarkMode={isDarkMode} />
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-[1100]">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0 z-[1100]">
           <div className="rounded-xl bg-black text-white text-sm px-3 py-2 shadow-lg">
             {toast}
           </div>
@@ -454,7 +517,7 @@ function StatusBadge({
 }: {
   status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
 }) {
-  const label = status ? statusLabel(status) : "Onbekend";
+  const label = status ? statusLabel(status as any) : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-emerald-200 text-emerald-900"
@@ -490,13 +553,15 @@ function StatusDot({
   );
 }
 
-function Legend() {
+function Legend({ isDarkMode }: { isDarkMode: boolean }) {
   const items: Array<{ label: string; color: string }> = [
     { label: "Werkend", color: colorForStatus("WORKING") },
     { label: "Problemen", color: colorForStatus("ISSUES") },
     { label: "Stuk", color: colorForStatus("OUT_OF_ORDER") },
     { label: "Onbekend", color: colorForStatus(null) },
   ];
+
+  const labelColor = isDarkMode ? "#e5e7eb" : "#374151";
 
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-xs px-3 pb-3">
@@ -511,7 +576,7 @@ function Legend() {
               boxShadow: "0 0 0 2px #ffffff",
             }}
           />
-          <span className="text-gray-700">{it.label}</span>
+          <span style={{ color: labelColor }}>{it.label}</span>
         </div>
       ))}
     </div>
@@ -534,7 +599,7 @@ function ReportForm({
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
@@ -587,7 +652,7 @@ function ReportForm({
       <button
         type="submit"
         disabled={loading}
-        className="bg-black text-white px-3 py-1.5 rounded-lg w-full"
+        className="bg-black text-white px-3 py-1.5 rounded-lg w-full disabled:opacity-70"
       >
         {loading ? "Versturen…" : "Melding plaatsen"}
       </button>

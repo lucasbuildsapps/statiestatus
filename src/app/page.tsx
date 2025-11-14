@@ -13,7 +13,7 @@ export default function Page() {
     <>
       <NavBar />
 
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-10 space-y-10">
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
         {/* HERO */}
         <section className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
@@ -38,7 +38,7 @@ export default function Page() {
 
         <PrivacyNote />
 
-		{/* MAP + NEARBY & CREDIBILITY */}
+        {/* MAP */}
         <section
           id="kaart"
           className="rounded-3xl border bg-white shadow-sm overflow-hidden"
@@ -46,6 +46,25 @@ export default function Page() {
           <MapClient />
         </section>
 
+        {/* MOBILE STICKY ACTIONS */}
+        <div className="fixed bottom-3 inset-x-3 z-[950] md:hidden">
+          <div className="bg-white/95 backdrop-blur rounded-2xl shadow-md border flex gap-2 p-2">
+            <a
+              href="#nearby"
+              className="flex-1 text-center text-xs font-medium px-3 py-2 rounded-xl border bg-gray-50"
+            >
+              📍 In de buurt
+            </a>
+            <a
+              href="#kaart"
+              className="flex-1 text-center text-xs font-medium px-3 py-2 rounded-xl bg-black text-white"
+            >
+              🔍 Terug naar kaart
+            </a>
+          </div>
+        </div>
+
+        {/* NEARBY + WHY */}
         <section className="grid md:grid-cols-[1.6fr,1.2fr] gap-6">
           <section
             id="nearby"
