@@ -3,9 +3,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useFavorites from "@/lib/useFavorites";
-import type { ApiLocation } from "@/app/api/locations/route";
 
-type LocationItem = ApiLocation;
+/**
+ * Keep this type in sync with what /api/locations returns,
+ * but keep it local so we don't import from server-only modules.
+ */
+type LocationItem = {
+  id: string;
+  name: string;
+  retailer: string;
+  lat: number;
+  lng: number;
+  address: string;
+  city: string;
+  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
+  lastReportAt?: string | null;
+  totalReports?: number;
+  // lastReports exists in the API but we don't use it here
+};
 
 type LocationWithDistance = LocationItem & {
   distanceKm: number | null;
@@ -102,14 +117,16 @@ export default function NearbyList() {
     );
   }, []);
 
-  const enriched: LocationWithDistance[] = useMemo(() => {
-    return locations.map((l) => ({
-      ...l,
-      distanceKm: pos
-        ? distanceKm(pos.lat, pos.lng, l.lat, l.lng)
-        : null,
-    }));
-  }, [locations, pos]);
+  const enriched: LocationWithDistance[] = useMemo(
+    () =>
+      locations.map((l) => ({
+        ...l,
+        distanceKm: pos
+          ? distanceKm(pos.lat, pos.lng, l.lat, l.lng)
+          : null,
+      })),
+    [locations, pos]
+  );
 
   const favoriteLocations: LocationWithDistance[] = useMemo(
     () => enriched.filter((l) => isFavorite(l.id)),
@@ -184,7 +201,7 @@ export default function NearbyList() {
         </div>
       )}
 
-      {/* Favourites */}
+      {/* Favorites */}
       {favoriteLocations.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
@@ -256,9 +273,7 @@ export default function NearbyList() {
                       disabled={submittingId === keyOut}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
-                      {submittingId === keyOut
-                        ? "Bezig…"
-                        : "❌ Stuk nu"}
+                      {submittingId === keyOut ? "Bezig…" : "❌ Stuk nu"}
                     </button>
                   </div>
 
@@ -281,11 +296,7 @@ export default function NearbyList() {
       <div className="space-y-2 pt-2 border-t">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Machines in de buurt</span>
-          {pos && (
-            <span>
-              Gebaseerd op jouw locatie
-            </span>
-          )}
+          {pos && <span>Gebaseerd op jouw locatie</span>}
         </div>
 
         {nearbyLocations.length === 0 && !loading && (
