@@ -1,8 +1,8 @@
 // src/components/MapView.tsx
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Map as LMap } from "leaflet";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
@@ -79,9 +79,13 @@ export default function MapView() {
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
+  // keep refs to markers so we can open popups programmatically
+  const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
+
   const fetchLocations = useCallback(async () => {
     try {
-      const r = await fetch("/api/locations", { cache: "no-store" });
+      // allow CDN/browser caching (faster repeat loads)
+      const r = await fetch("/api/locations");
       const d = await r.json();
       setLocations(Array.isArray(d.locations) ? d.locations : []);
     } catch {
@@ -152,14 +156,26 @@ export default function MapView() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
-  function flyToLocation(l: LocationItem) {
+  // center map with slight vertical offset and optionally open popup
+  function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
-    map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
+
+    // small offset so popup is visually more centered
+    const offsetLat = l.lat - 0.01;
+
+    map.flyTo([offsetLat, l.lng], 15, { duration: 0.8 });
     setHighlightId(l.id);
     window.setTimeout(
       () => setHighlightId((id) => (id === l.id ? null : id)),
       1500
     );
+
+    if (openPopup) {
+      const marker = markerRefs.current[l.id];
+      if (marker) {
+        marker.openPopup();
+      }
+    }
   }
 
   function shareLocation(l: LocationItem) {
@@ -210,9 +226,9 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters, moved to the RIGHT so it doesn't cover the popup */}
-      <div className="absolute right-4 top-3 z-[900]">
-        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
+      {/* Search + filters, bottom-right so it doesn't cover popup */}
+      <div className="absolute right-4 bottom-4 z-[900]">
+        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -254,7 +270,7 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    flyToLocation(l);
+                    focusLocation(l, true); // fly + open popup
                     setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
@@ -312,8 +328,12 @@ export default function MapView() {
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
               }}
+              // store instance so we can openPopup from search
+              ref={(instance: LeafletCircle | null) => {
+                markerRefs.current[l.id] = instance;
+              }}
               eventHandlers={{
-                click: () => flyToLocation(l),
+                click: () => focusLocation(l, true),
               }}
             >
               <Popup>
@@ -363,7 +383,7 @@ export default function MapView() {
                       <div className="font-medium">Recente meldingen</div>
                       <ul className="space-y-1">
                         {l.lastReports.map((r) => (
-                          <li key={r.id} className="flex items.start gap-2">
+                          <li key={r.id} className="flex items-start gap-2">
                             <span className="shrink-0 mt-0.5">
                               <StatusDot status={r.status} />
                             </span>
@@ -431,7 +451,11 @@ function StatusBadge({
   );
 }
 
-function StatusDot({ status }: { status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" }) {
+function StatusDot({
+  status,
+}: {
+  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+}) {
   const color = colorForStatus(status);
   return (
     <span
