@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { distanceKm } from "@/lib/geo";
+import useFavorites from "@/lib/useFavorites";
 
 type LocationItem = {
   id: string;
@@ -20,7 +21,14 @@ function StatusBadge({
 }: {
   status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
 }) {
-  const label = status ?? "Unknown";
+  const label =
+    status === "WORKING"
+      ? "Werkend"
+      : status === "ISSUES"
+      ? "Problemen"
+      : status === "OUT_OF_ORDER"
+      ? "Stuk"
+      : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-green-100 text-green-800"
@@ -41,6 +49,8 @@ export default function NearbyList() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // fetch locations
   useEffect(() => {
@@ -142,6 +152,13 @@ export default function NearbyList() {
                 >
                   Open in Maps
                 </a>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(l.id)}
+                  className="text-xs px-2 py-1 rounded border hover:bg-gray-50 mt-1"
+                >
+                  {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                </button>
               </div>
             </li>
           );

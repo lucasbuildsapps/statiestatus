@@ -1,7 +1,13 @@
 // src/components/MapView.tsx
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
 
@@ -39,6 +45,12 @@ function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
   if (s === "ISSUES") return "#eab308";
   if (s === "OUT_OF_ORDER") return "#ef4444";
   return "#9ca3af";
+}
+
+function statusLabel(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER") {
+  if (s === "WORKING") return "Werkend";
+  if (s === "ISSUES") return "Problemen";
+  return "Stuk";
 }
 
 function timeAgo(iso?: string | null) {
@@ -84,8 +96,7 @@ export default function MapView() {
 
   const fetchLocations = useCallback(async () => {
     try {
-      // allow CDN/browser caching (faster repeat loads)
-      const r = await fetch("/api/locations");
+      const r = await fetch("/api/locations"); // allow normal caching
       const d = await r.json();
       setLocations(Array.isArray(d.locations) ? d.locations : []);
     } catch {
@@ -156,14 +167,13 @@ export default function MapView() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
-  // center map with slight vertical offset and optionally open popup
+  // center map on location and optionally open popup
   function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
 
-    // small offset so popup is visually more centered
-    const offsetLat = l.lat - 0.01;
+    // go straight to that point (no weird jump path)
+    map.setView([l.lat, l.lng], 16);
 
-    map.flyTo([offsetLat, l.lng], 15, { duration: 0.8 });
     setHighlightId(l.id);
     window.setTimeout(
       () => setHighlightId((id) => (id === l.id ? null : id)),
@@ -226,8 +236,8 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters, bottom-right so it doesn't cover popup */}
-      <div className="absolute right-4 bottom-4 z-[900]">
+      {/* Search + filters back top-right */}
+      <div className="absolute right-4 top-4 z-[900]">
         <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
           <input
             value={q}
@@ -270,7 +280,7 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    focusLocation(l, true); // fly + open popup
+                    focusLocation(l, true); // go there + open popup
                     setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
@@ -328,7 +338,6 @@ export default function MapView() {
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
               }}
-              // store instance so we can openPopup from search
               ref={(instance: LeafletCircle | null) => {
                 markerRefs.current[l.id] = instance;
               }}
@@ -337,12 +346,18 @@ export default function MapView() {
               }}
             >
               <Popup>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
+                <div className="space-y-3 text-sm">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{l.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {l.retailer} – {l.address}, {l.city}
+                      <div className="font-semibold text-base">
+                        {l.name}
+                      </div>
+                      <div className="text-gray-700">
+                        {l.retailer}
+                      </div>
+                      <div className="text-gray-600 text-xs">
+                        {l.address}, {l.city}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 items-end">
@@ -363,21 +378,24 @@ export default function MapView() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Status row */}
+                  <div className="flex items-center justify-between gap-2">
                     <StatusBadge status={l.currentStatus} />
-                    <span className="text-xs text-gray-500">
-                      {l.lastReportAt
-                        ? `Laatste melding ${timeAgo(l.lastReportAt)}`
-                        : "Nog geen meldingen"}
-                    </span>
+                    <div className="text-xs text-gray-500 text-right">
+                      {l.lastReportAt ? (
+                        <>
+                          Laatste melding {timeAgo(l.lastReportAt)}
+                          {typeof l.totalReports === "number" && (
+                            <div>{confidenceText(l.totalReports)}</div>
+                          )}
+                        </>
+                      ) : (
+                        "Nog geen meldingen"
+                      )}
+                    </div>
                   </div>
 
-                  {typeof l.totalReports === "number" && (
-                    <div className="text-xs text-gray-500">
-                      {confidenceText(l.totalReports)}
-                    </div>
-                  )}
-
+                  {/* Recent reports */}
                   {l.lastReports && l.lastReports.length > 0 && (
                     <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
                       <div className="font-medium">Recente meldingen</div>
@@ -388,7 +406,7 @@ export default function MapView() {
                               <StatusDot status={r.status} />
                             </span>
                             <span className="text-gray-700">
-                              <b>{r.status.replaceAll("_", " ")}</b>
+                              <b>{statusLabel(r.status)}</b>
                               {r.note ? ` — ${r.note}` : ""}
                               <span className="text-gray-500">
                                 {" "}
@@ -401,6 +419,7 @@ export default function MapView() {
                     </div>
                   )}
 
+                  {/* Report form */}
                   <ReportForm
                     locationId={l.id}
                     onSuccess={async () => {
@@ -435,7 +454,7 @@ function StatusBadge({
 }: {
   status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
 }) {
-  const label = status ?? "Unknown";
+  const label = status ? statusLabel(status) : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-emerald-200 text-emerald-900"

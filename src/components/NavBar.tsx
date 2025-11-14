@@ -1,29 +1,38 @@
 // src/components/NavBar.tsx
 "use client";
-import Logo from "./Logo";
+
+import Image from "next/image";
 
 export default function NavBar() {
   return (
-    <div className="sticky top-0 z-[2000] bg-white/90 backdrop-blur border-b">
-      <nav className="max-w-4xl mx-auto flex items-center justify-between p-3">
-        <a href="/" className="flex items-center gap-2">
-          <Logo />
+    <header className="border-b bg-white/80 backdrop-blur">
+      <div className="max-w-5xl mx-auto flex items-center justify-between px-4 md:px-6 py-3">
+        <a href="#top" className="flex items-center gap-2">
+          <Image
+            src="/icon.svg"
+            alt="statiestatus.nl"
+            width={24}
+            height={24}
+          />
+          <span className="font-semibold text-sm sm:text-base">
+            statiestatus.nl
+          </span>
         </a>
-        <div className="flex items-center gap-4 text-sm">
-          <a href="#kaart" className="hover:underline">Kaart</a>
-          <a href="#nearby" className="hover:underline">In de buurt</a>
-          <a href="#add-machine" className="hover:underline">Toevoegen</a>
-          <a href="#about" className="hover:underline">Over</a>
-          <a href="#contact" className="hover:underline">Contact</a>
-          <a
-            href="#kaart"
-            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
-            title="Plaats een melding"
-          >
-            Melden
+        <nav className="flex items-center gap-3 text-xs sm:text-sm text-gray-700">
+          <a href="#kaart" className="hover:text-black">
+            Kaart
           </a>
-        </div>
-      </nav>
-    </div>
+          <a href="#nearby" className="hover:text-black">
+            In de buurt
+          </a>
+          <a href="#about" className="hover:text-black">
+            Over
+          </a>
+          <a href="#contact" className="hover:text-black">
+            Contact
+          </a>
+        </nav>
+      </div>
+    </header>
   );
 }
