@@ -3,7 +3,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Map as LMap } from "leaflet";
-import { useSearchParams } from "next/navigation";
 import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
@@ -63,8 +62,6 @@ function confidenceText(total?: number) {
 }
 
 export default function MapView() {
-  const searchParams = useSearchParams();
-
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
   const [map, setMap] = useState<LMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -79,7 +76,6 @@ export default function MapView() {
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [centeredOnUser, setCenteredOnUser] = useState(false);
-  const [handledSharedLocation, setHandledSharedLocation] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -97,6 +93,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
+  // dynamic import of react-leaflet
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,6 +115,7 @@ export default function MapView() {
     };
   }, []);
 
+  // user geolocation
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -129,7 +127,7 @@ export default function MapView() {
     );
   }, []);
 
-  const defaultCenter: [number, number] = [52.3676, 4.9041];
+  const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
     let list = locations;
@@ -184,18 +182,6 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  const sharedLocationId = searchParams.get("location");
-
-  useEffect(() => {
-    if (!map) return;
-    if (!sharedLocationId) return;
-    if (handledSharedLocation) return;
-    const l = locations.find((loc) => loc.id === sharedLocationId);
-    if (!l) return;
-    flyToLocation(l);
-    setHandledSharedLocation(true);
-  }, [map, sharedLocationId, handledSharedLocation, locations]);
-
   if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[70vh] grid place-items-center">
@@ -213,19 +199,19 @@ export default function MapView() {
     }, [m]);
 
     useEffect(() => {
-      if (m && pos && !centeredOnUser && !sharedLocationId) {
+      if (m && pos && !centeredOnUser) {
         m.setView([pos.lat, pos.lng], 14);
         setCenteredOnUser(true);
       }
-    }, [m, pos, centeredOnUser, sharedLocationId]);
+    }, [m, pos, centeredOnUser]);
 
     return null;
   }
 
   return (
     <div className="relative">
-      {/* Search + filters, slightly to the right */}
-      <div className="absolute left-16 top-3 z-[900]">
+      {/* Search + filters, moved to the RIGHT so it doesn't cover the popup */}
+      <div className="absolute right-4 top-3 z-[900]">
         <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
           <input
             value={q}
@@ -377,7 +363,7 @@ export default function MapView() {
                       <div className="font-medium">Recente meldingen</div>
                       <ul className="space-y-1">
                         {l.lastReports.map((r) => (
-                          <li key={r.id} className="flex items-start gap-2">
+                          <li key={r.id} className="flex items.start gap-2">
                             <span className="shrink-0 mt-0.5">
                               <StatusDot status={r.status} />
                             </span>
