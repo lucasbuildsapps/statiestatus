@@ -1,4 +1,4 @@
-// app/layout.tsx
+// src/app/layout.tsx
 import "leaflet/dist/leaflet.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -8,14 +8,19 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "statiestatus.nl",
   description: "Check en rapporteer de status van statiegeldmachines.",
   icons: {
-    icon: "/icon.svg", // ✅ use bottle logo
+    icon: "/icon.svg",
   },
+  manifest: "/manifest.webmanifest",
+  themeColor: "#16a34a",
 };
 
 export default function RootLayout({
@@ -23,7 +28,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="nl">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         {children}
         <Analytics />
         <SpeedInsights />
