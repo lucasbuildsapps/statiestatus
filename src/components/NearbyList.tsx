@@ -4,10 +4,6 @@
 import { useEffect, useMemo, useState } from "react";
 import useFavorites from "@/lib/useFavorites";
 
-/**
- * Keep this type in sync with what /api/locations returns,
- * but keep it local so we don't import from server-only modules.
- */
 type LocationItem = {
   id: string;
   name: string;
@@ -19,7 +15,6 @@ type LocationItem = {
   currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
   lastReportAt?: string | null;
   totalReports?: number;
-  // lastReports exists in the API but we don't use it here
 };
 
 type LocationWithDistance = LocationItem & {
@@ -73,6 +68,7 @@ export default function NearbyList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoError, setGeoError] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -107,12 +103,18 @@ export default function NearbyList() {
 
   // geolocation
   useEffect(() => {
-    if (!("geolocation" in navigator)) return;
+    if (!("geolocation" in navigator)) {
+      setGeoError(true);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (p) => {
         setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
       },
-      () => {},
+      (err) => {
+        console.error(err);
+        setGeoError(true);
+      },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }, []);
@@ -129,18 +131,22 @@ export default function NearbyList() {
   );
 
   const favoriteLocations: LocationWithDistance[] = useMemo(
-    () => enriched.filter((l) => isFavorite(l.id)),
+    () => enriched.filter((l) => isFavorite(l.id)).slice(0, 5),
     [enriched, isFavorite]
   );
 
   const nearbyLocations: LocationWithDistance[] = useMemo(() => {
+    if (!pos) {
+      // No location yet or denied: don't show random machines
+      return [];
+    }
     const sorted = [...enriched].sort((a, b) => {
       const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
       const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
       return da - db;
     });
-    return sorted.slice(0, 12);
-  }, [enriched]);
+    return sorted.slice(0, 5); // max 5 for visibility
+  }, [enriched, pos]);
 
   function formatDistance(d: number | null) {
     if (d == null || !isFinite(d)) return "Afstand onbekend";
@@ -201,7 +207,7 @@ export default function NearbyList() {
         </div>
       )}
 
-      {/* Favorites */}
+      {/* Favourites */}
       {favoriteLocations.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
@@ -299,54 +305,64 @@ export default function NearbyList() {
           {pos && <span>Gebaseerd op jouw locatie</span>}
         </div>
 
-        {nearbyLocations.length === 0 && !loading && (
+        {!pos && !loading && (
           <p className="text-xs text-gray-500">
-            Geen locaties gevonden. Probeer de kaart te gebruiken of zoom
-            verder uit.
+            {geoError
+              ? "We hebben geen toegang tot je locatie. Gebruik de kaart hierboven om een machine te vinden, of voeg zelf een locatie toe."
+              : "We bepalen je locatie om machines in de buurt te tonen…"}
           </p>
         )}
 
-        <ul className="space-y-2">
-          {nearbyLocations.map((l) => (
-            <li
-              key={l.id}
-              className="rounded-xl border bg-white p-3 flex flex-col gap-1"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-medium">{l.name}</div>
-                  <div className="text-xs text-gray-600">
-                    {l.retailer} • {l.city}
-                  </div>
-                  <div className="text-[11px] text-gray-500">
-                    {l.address}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleFavorite(l.id)}
-                  className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
-                >
-                  {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
-                </button>
-              </div>
+        {nearbyLocations.length === 0 && pos && !loading && (
+          <p className="text-xs text-gray-500">
+            Geen locaties in de buurt gevonden. Zoom verder uit op de kaart
+            hierboven om meer machines te zien.
+          </p>
+        )}
 
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
-                <span>
-                  Status: <b>{statusLabel(l.currentStatus)}</b>
-                  {" • "}
-                  Laatste melding:{" "}
-                  {l.lastReportAt
-                    ? timeAgo(l.lastReportAt)
-                    : "nog geen meldingen"}
-                </span>
-                {l.distanceKm != null && (
-                  <span>{formatDistance(l.distanceKm)}</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        {nearbyLocations.length > 0 && (
+          <ul className="space-y-2">
+            {nearbyLocations.map((l) => (
+              <li
+                key={l.id}
+                className="rounded-xl border bg-white p-3 flex flex-col gap-1"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium">{l.name}</div>
+                    <div className="text-xs text-gray-600">
+                      {l.retailer} • {l.city}
+                    </div>
+                    <div className="text-[11px] text-gray-500">
+                      {l.address}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleFavorite(l.id)}
+                    className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
+                  >
+                    {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>
+                    Status: <b>{statusLabel(l.currentStatus)}</b>
+                    {" • "}
+                    Laatste melding:{" "}
+                    {l.lastReportAt
+                      ? timeAgo(l.lastReportAt)
+                      : "nog geen meldingen"}
+                  </span>
+                  {l.distanceKm != null && (
+                    <span>{formatDistance(l.distanceKm)}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
