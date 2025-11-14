@@ -1,9 +1,14 @@
 // src/components/MapView.tsx
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Map as LMap } from "leaflet";
-import { useSearchParams } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
 
 type LeafletAPI = {
@@ -42,6 +47,12 @@ function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
   return "#9ca3af";
 }
 
+function statusLabel(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER") {
+  if (s === "WORKING") return "Werkend";
+  if (s === "ISSUES") return "Problemen";
+  return "Stuk";
+}
+
 function timeAgo(iso?: string | null) {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
@@ -63,8 +74,6 @@ function confidenceText(total?: number) {
 }
 
 export default function MapView() {
-  const searchParams = useSearchParams();
-
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
   const [map, setMap] = useState<LMap | null>(null);
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -79,13 +88,15 @@ export default function MapView() {
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [centeredOnUser, setCenteredOnUser] = useState(false);
-  const [handledSharedLocation, setHandledSharedLocation] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
+  // keep refs to markers so we can open popups programmatically
+  const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
+
   const fetchLocations = useCallback(async () => {
     try {
-      const r = await fetch("/api/locations", { cache: "no-store" });
+      const r = await fetch("/api/locations"); // allow normal caching
       const d = await r.json();
       setLocations(Array.isArray(d.locations) ? d.locations : []);
     } catch {
@@ -97,6 +108,7 @@ export default function MapView() {
     fetchLocations();
   }, [fetchLocations]);
 
+  // dynamic import of react-leaflet
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,6 +130,7 @@ export default function MapView() {
     };
   }, []);
 
+  // user geolocation
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -129,7 +142,7 @@ export default function MapView() {
     );
   }, []);
 
-  const defaultCenter: [number, number] = [52.3676, 4.9041];
+  const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
     let list = locations;
@@ -154,14 +167,25 @@ export default function MapView() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
-  function flyToLocation(l: LocationItem) {
+  // center map on location and optionally open popup
+  function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
-    map.flyTo([l.lat, l.lng], 15, { duration: 0.8 });
+
+    // go straight to that point (no weird jump path)
+    map.setView([l.lat, l.lng], 16);
+
     setHighlightId(l.id);
     window.setTimeout(
       () => setHighlightId((id) => (id === l.id ? null : id)),
       1500
     );
+
+    if (openPopup) {
+      const marker = markerRefs.current[l.id];
+      if (marker) {
+        marker.openPopup();
+      }
+    }
   }
 
   function shareLocation(l: LocationItem) {
@@ -184,18 +208,6 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  const sharedLocationId = searchParams.get("location");
-
-  useEffect(() => {
-    if (!map) return;
-    if (!sharedLocationId) return;
-    if (handledSharedLocation) return;
-    const l = locations.find((loc) => loc.id === sharedLocationId);
-    if (!l) return;
-    flyToLocation(l);
-    setHandledSharedLocation(true);
-  }, [map, sharedLocationId, handledSharedLocation, locations]);
-
   if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[70vh] grid place-items-center">
@@ -213,20 +225,20 @@ export default function MapView() {
     }, [m]);
 
     useEffect(() => {
-      if (m && pos && !centeredOnUser && !sharedLocationId) {
+      if (m && pos && !centeredOnUser) {
         m.setView([pos.lat, pos.lng], 14);
         setCenteredOnUser(true);
       }
-    }, [m, pos, centeredOnUser, sharedLocationId]);
+    }, [m, pos, centeredOnUser]);
 
     return null;
   }
 
   return (
     <div className="relative">
-      {/* Search + filters, slightly to the right */}
-      <div className="absolute left-16 top-3 z-[900]">
-        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[280px]">
+      {/* Search + filters back top-right */}
+      <div className="absolute right-4 top-4 z-[900]">
+        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-2 w-[260px]">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -268,7 +280,7 @@ export default function MapView() {
                   key={l.id}
                   className="p-2 text-sm cursor-pointer hover:bg-gray-50"
                   onClick={() => {
-                    flyToLocation(l);
+                    focusLocation(l, true); // go there + open popup
                     setQ("");
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
@@ -326,17 +338,26 @@ export default function MapView() {
                 fillColor: colorForStatus(l.currentStatus),
                 fillOpacity: 0.95,
               }}
+              ref={(instance: LeafletCircle | null) => {
+                markerRefs.current[l.id] = instance;
+              }}
               eventHandlers={{
-                click: () => flyToLocation(l),
+                click: () => focusLocation(l, true),
               }}
             >
               <Popup>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
+                <div className="space-y-3 text-sm">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{l.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {l.retailer} – {l.address}, {l.city}
+                      <div className="font-semibold text-base">
+                        {l.name}
+                      </div>
+                      <div className="text-gray-700">
+                        {l.retailer}
+                      </div>
+                      <div className="text-gray-600 text-xs">
+                        {l.address}, {l.city}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 items-end">
@@ -357,21 +378,24 @@ export default function MapView() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Status row */}
+                  <div className="flex items-center justify-between gap-2">
                     <StatusBadge status={l.currentStatus} />
-                    <span className="text-xs text-gray-500">
-                      {l.lastReportAt
-                        ? `Laatste melding ${timeAgo(l.lastReportAt)}`
-                        : "Nog geen meldingen"}
-                    </span>
+                    <div className="text-xs text-gray-500 text-right">
+                      {l.lastReportAt ? (
+                        <>
+                          Laatste melding {timeAgo(l.lastReportAt)}
+                          {typeof l.totalReports === "number" && (
+                            <div>{confidenceText(l.totalReports)}</div>
+                          )}
+                        </>
+                      ) : (
+                        "Nog geen meldingen"
+                      )}
+                    </div>
                   </div>
 
-                  {typeof l.totalReports === "number" && (
-                    <div className="text-xs text-gray-500">
-                      {confidenceText(l.totalReports)}
-                    </div>
-                  )}
-
+                  {/* Recent reports */}
                   {l.lastReports && l.lastReports.length > 0 && (
                     <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
                       <div className="font-medium">Recente meldingen</div>
@@ -382,7 +406,7 @@ export default function MapView() {
                               <StatusDot status={r.status} />
                             </span>
                             <span className="text-gray-700">
-                              <b>{r.status.replaceAll("_", " ")}</b>
+                              <b>{statusLabel(r.status)}</b>
                               {r.note ? ` — ${r.note}` : ""}
                               <span className="text-gray-500">
                                 {" "}
@@ -395,6 +419,7 @@ export default function MapView() {
                     </div>
                   )}
 
+                  {/* Report form */}
                   <ReportForm
                     locationId={l.id}
                     onSuccess={async () => {
@@ -429,7 +454,7 @@ function StatusBadge({
 }: {
   status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
 }) {
-  const label = status ?? "Unknown";
+  const label = status ? statusLabel(status) : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-emerald-200 text-emerald-900"
@@ -445,7 +470,11 @@ function StatusBadge({
   );
 }
 
-function StatusDot({ status }: { status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" }) {
+function StatusDot({
+  status,
+}: {
+  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+}) {
   const color = colorForStatus(status);
   return (
     <span
