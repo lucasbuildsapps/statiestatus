@@ -1,44 +1,77 @@
+// src/app/api/locations/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ipHash } from "@/lib/ip";
-import { canSubmit, sanitizeNote } from "@/lib/antiSpam";
 
-const Body = z.object({
-  // ✅ Accept ANY string, not just CUID
-  locationId: z.string(),
-  status: z.enum(["WORKING", "ISSUES", "OUT_OF_ORDER"]),
-  note: z.string().max(280).optional().default("")
-});
+export type ApiLocation = {
+  id: string;
+  name: string;
+  retailer: string;
+  lat: number;
+  lng: number;
+  address: string;
+  city: string;
+  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
+  lastReportAt: string | null;
+  totalReports: number;
+  lastReports: {
+    id: string;
+    status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+    note: string;
+    createdAt: string;
+  }[];
+};
 
-export async function POST(req: NextRequest) {
-  const json = await req.json();
-  const parsed = Body.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+export async function GET() {
+  try {
+    const locations = await prisma.location.findMany({
+      orderBy: { name: "asc" },
+      include: {
+        reports: {
+          orderBy: { createdAt: "desc" },
+          take: 3,
+        },
+        _count: {
+          select: { reports: true },
+        },
+      },
+    });
+
+    const payload: ApiLocation[] = locations.map((loc) => {
+      const [latest] = loc.reports;
+      const lastReport = latest ?? null;
+
+      return {
+        id: loc.id,
+        name: loc.name,
+        retailer: loc.retailer,
+        lat: loc.lat,
+        lng: loc.lng,
+        address: loc.address,
+        city: loc.city,
+        currentStatus: lastReport ? lastReport.status : null,
+        lastReportAt: lastReport
+          ? lastReport.createdAt.toISOString()
+          : null,
+        totalReports: loc._count.reports,
+        lastReports: loc.reports.map((r) => ({
+          id: r.id,
+          status: r.status,
+          note: r.note ?? "",
+          createdAt: r.createdAt.toISOString(),
+        })),
+      };
+    });
+
+    return NextResponse.json({ locations: payload });
+  } catch (err) {
+    console.error("Error in /api/locations:", err);
+    return NextResponse.json(
+      { locations: [] as ApiLocation[], error: "Failed to load locations" },
+      { status: 500 }
+    );
   }
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "0.0.0.0";
-  const ipKey = ipHash(ip, process.env.IP_HASH_SECRET || "changeme");
-  const ok = canSubmit(ipKey);
-  if (!ok.ok) {
-    return NextResponse.json({ error: `Rate limited. Retry in ${ok.retryAfter}s` }, { status: 429 });
-  }
-
-  const { locationId, status, note } = parsed.data;
-
-  const loc = await prisma.location.findUnique({ where: { id: locationId } });
-  if (!loc) {
-    return NextResponse.json({ error: "Unknown location" }, { status: 404 });
-  }
-
-  const created = await prisma.report.create({
-    data: { locationId, status, note: sanitizeNote(note), ipHash: ipKey }
-  });
-
-  return NextResponse.json({ ok: true, id: created.id });
 }
