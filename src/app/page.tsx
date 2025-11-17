@@ -25,12 +25,12 @@ export default function Page() {
             statiestatus.nl
           </h1>
 
-          <p className="text-gray-600 max-w-2xl mx-auto text-sm sm:text-base">
+          <p className="text-gray-700 dark:text-gray-200 max-w-2xl mx-auto text-sm sm:text-base">
             Controleer of een statiegeldmachine werkt en help anderen door de
             status te rapporteren. Geen account nodig, volledig community-gedreven.
           </p>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             Laatste update: real-time uit community meldingen • gegevens zijn
             indicatief en niet officieel.
           </p>

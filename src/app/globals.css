@@ -31,3 +31,31 @@ a {
 html {
   scroll-behavior: smooth;
 }
+
+/* Make Leaflet popups clearer, especially in dark mode */
+.leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+}
+
+.leaflet-popup-content {
+  margin: 0.75rem 0.9rem;
+}
+
+.leaflet-popup-tip {
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .leaflet-popup-content-wrapper {
+    background: #020617; /* same as page background */
+    color: #e5e7eb;
+    border: 1px solid #111827;
+  }
+
+  .leaflet-popup-tip {
+    background: #020617;
+    border-top: 1px solid #111827;
+    border-left: 1px solid #111827;
+  }
+}

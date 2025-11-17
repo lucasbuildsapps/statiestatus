@@ -42,10 +42,10 @@ type LocationItem = {
 };
 
 function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
-  if (s === "WORKING") return "#22c55e";
-  if (s === "ISSUES") return "#eab308";
-  if (s === "OUT_OF_ORDER") return "#ef4444";
-  return "#9ca3af";
+  if (s === "WORKING") return "#22c55e"; // green-500
+  if (s === "ISSUES") return "#eab308"; // yellow-500
+  if (s === "OUT_OF_ORDER") return "#ef4444"; // red-500
+  return "#9ca3af"; // gray-400
 }
 
 function statusLabel(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER") {
@@ -274,7 +274,7 @@ export default function MapView() {
     <div className="relative">
       {/* Search + filters – centered on mobile, right on desktop */}
       <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0">
-        <div className="bg-white/95 backdrop-blur border rounded-xl shadow-sm p-3 w-[92vw] max-w-[360px] sm:w-[280px]">
+        <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md md:shadow-lg p-3 w-[92vw] max-w-[360px] sm:w-[280px]">
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
             <span>
               Laatste update:{" "}
@@ -585,6 +585,16 @@ function Legend({ isDarkMode }: { isDarkMode: boolean }) {
 
 /* ---------- Popup report form ---------- */
 
+type ReportIssueType = "FULL" | "RECEIPT" | "NO_ACCEPT" | "DOWN" | "OTHER";
+
+const ISSUE_LABELS: Record<ReportIssueType, string> = {
+  FULL: "Machine lijkt vol",
+  RECEIPT: "Bon komt niet uit",
+  NO_ACCEPT: "Accepteert geen flessen",
+  DOWN: "Machine lijkt uitgevallen",
+  OTHER: "Anders probleem",
+};
+
 function ReportForm({
   locationId,
   onSuccess,
@@ -592,9 +602,10 @@ function ReportForm({
   locationId: string;
   onSuccess?: () => void | Promise<void>;
 }) {
-  const [status, setStatus] = useState<"WORKING" | "ISSUES" | "OUT_OF_ORDER">(
+  const [status, setStatus] = useState<"WORKING" | "OUT_OF_ORDER">(
     "WORKING"
   );
+  const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -604,11 +615,21 @@ function ReportForm({
     setLoading(true);
     setMsg(null);
 
+    const reason =
+      status === "OUT_OF_ORDER" && issueType
+        ? ISSUE_LABELS[issueType]
+        : "";
+
+    const pieces = [];
+    if (reason) pieces.push(reason);
+    if (note.trim()) pieces.push(note.trim());
+    const finalNote = pieces.join(" — ");
+
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationId, status, note }),
+        body: JSON.stringify({ locationId, status, note: finalNote }),
       });
 
       const data = await res.json();
@@ -619,6 +640,7 @@ function ReportForm({
 
       setMsg("✅ Melding geplaatst.");
       setNote("");
+      setIssueType(null);
       if (onSuccess) await onSuccess();
     } catch {
       setMsg("Netwerkfout");
@@ -629,18 +651,60 @@ function ReportForm({
 
   return (
     <form onSubmit={submit} className="space-y-2 text-sm">
+      {/* Status select */}
       <select
         value={status}
-        onChange={(e) =>
-          setStatus(e.target.value as "WORKING" | "ISSUES" | "OUT_OF_ORDER")
-        }
+        onChange={(e) => {
+          const next = e.target.value as "WORKING" | "OUT_OF_ORDER";
+          setStatus(next);
+          if (next === "WORKING") {
+            setIssueType(null);
+          }
+        }}
         className="border rounded-lg px-2 py-1 w-full"
       >
         <option value="WORKING">✅ Werkend</option>
-        <option value="ISSUES">⚠️ Problemen (traag/loopt vast)</option>
         <option value="OUT_OF_ORDER">❌ Stuk</option>
       </select>
 
+      {/* Reason chips when stuk */}
+      {status === "OUT_OF_ORDER" && (
+        <div className="space-y-1">
+          <div className="text-xs text-gray-600">
+            Wat lijkt er aan de hand? (optioneel)
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
+            {([
+              { id: "FULL", label: "Machine vol" },
+              { id: "RECEIPT", label: "Bon komt niet uit" },
+              { id: "NO_ACCEPT", label: "Accepteert geen flessen" },
+              { id: "DOWN", label: "Machine uitgevallen" },
+              { id: "OTHER", label: "Anders" },
+            ] as const).map((opt) => {
+              const active = issueType === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() =>
+                    setIssueType(active ? null : opt.id)
+                  }
+                  className={
+                    "px-2.5 py-1 rounded-full border " +
+                    (active
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-800 hover:bg-gray-50")
+                  }
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Note */}
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
