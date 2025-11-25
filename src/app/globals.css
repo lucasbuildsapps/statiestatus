@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
+/* Single, always-light theme */
 :root {
-  --background: #f3f4f6;
-  --foreground: #111827;
+  --background: #f3f4f6; /* slate-100-ish */
+  --foreground: #111827; /* slate-900-ish */
 }
 
 @theme inline {
@@ -12,15 +13,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #e5e7eb;
-  }
-}
-
+/* Force light background and text */
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
 }
 
@@ -32,10 +27,13 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Make Leaflet popups clearer, especially in dark mode */
+/* Leaflet popup styling – always light */
 .leaflet-popup-content-wrapper {
   border-radius: 0.75rem;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
 }
 
 .leaflet-popup-content {
@@ -44,18 +42,7 @@ html {
 
 .leaflet-popup-tip {
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
-}
-
-@media (prefers-color-scheme: dark) {
-  .leaflet-popup-content-wrapper {
-    background: #020617; /* same as page background */
-    color: #e5e7eb;
-    border: 1px solid #111827;
-  }
-
-  .leaflet-popup-tip {
-    background: #020617;
-    border-top: 1px solid #111827;
-    border-left: 1px solid #111827;
-  }
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
 }
