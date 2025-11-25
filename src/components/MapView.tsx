@@ -93,6 +93,8 @@ export default function MapView() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
+  const [controlsOpen, setControlsOpen] = useState(true); // NEW: toggle controls on mobile
+
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
@@ -273,9 +275,36 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters – centered on mobile, right on desktop */}
-      <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0">
-        <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md md:shadow-lg p-3 w-[92vw] max-w-[360px] sm:w-[280px]">
+      {/* Controls wrapper (positioned) */}
+      <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0 w-[92vw] max-w-[360px] sm:w-[280px]">
+        {/* Mobile toggle pill */}
+        <div className="sm:hidden mb-2 flex justify-center">
+          {controlsOpen ? (
+            <button
+              type="button"
+              onClick={() => setControlsOpen(false)}
+              className="inline-flex items-center gap-1 rounded-full bg-white/95 border border-gray-200 px-3 py-1 text-[11px] shadow-sm"
+            >
+              ⬇ Kaart groter maken
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setControlsOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full bg-white/95 border border-gray-200 px-3 py-1 text-[11px] shadow-sm"
+            >
+              🔍 Filter & zoeken
+            </button>
+          )}
+        </div>
+
+        {/* Main controls card */}
+        <div
+          className={
+            "bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md md:shadow-lg p-3 max-h-[70vh] overflow-y-auto " +
+            (controlsOpen ? "block" : "hidden sm:block")
+          }
+        >
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
             <span>
               Laatste update:{" "}
@@ -340,7 +369,7 @@ export default function MapView() {
           )}
 
           {q && (
-            <ul className="max-h-52 overflow-auto mt-2 divide-y border rounded-lg bg-white">
+            <ul className="max-h-40 overflow-auto mt-2 divide-y border rounded-lg bg-white">
               {filtered.slice(0, 8).map((l) => (
                 <li
                   key={l.id}
@@ -348,6 +377,7 @@ export default function MapView() {
                   onClick={() => {
                     focusLocation(l, true);
                     setQ("");
+                    setControlsOpen(false); // auto-collapse after selecting
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
                 >
@@ -365,6 +395,7 @@ export default function MapView() {
         </div>
       </div>
 
+      {/* Map itself */}
       <div className="w-full h-[60vh] md:h-[70vh]">
         <MapContainer
           center={defaultCenter}
@@ -394,8 +425,7 @@ export default function MapView() {
           )}
 
           {visibleLocations.map((l) => {
-            const baseFill = colorForStatus(l.currentStatus);
-            const fillColor = !l.currentStatus ? baseFill : baseFill;
+            const fillColor = colorForStatus(l.currentStatus);
 
             return (
               <CircleMarker
