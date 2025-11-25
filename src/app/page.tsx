@@ -26,14 +26,14 @@ export default function Page() {
               statiestatus.nl
             </h1>
 
-            <p className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+            <p className="text-gray-700 text-sm sm:text-base">
               Controleer of een statiegeldmachine werkt en help anderen door de
               status te rapporteren. Geen account nodig, geen reclame, volledig
               community-gedreven.
             </p>
           </div>
 
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-gray-500">
             Laatste update: real-time uit community-meldingen • gegevens zijn
             indicatief en niet officieel.
           </p>
@@ -137,8 +137,8 @@ export default function Page() {
                 3. Meld jouw ervaring
               </div>
               <p>
-                Plaats zelf een melding na je bezoek. Zo help je anderen én wordt
-                de data betrouwbaarder.
+                Plaats zelf een melding na je bezoek. Zo help je anderen én
+                wordt de data betrouwbaarder.
               </p>
             </div>
           </div>
@@ -185,9 +185,7 @@ export default function Page() {
           <h2 className="text-lg font-semibold">Veelgestelde vragen</h2>
           <dl className="space-y-3 text-sm text-gray-700">
             <div>
-              <dt className="font-medium">
-                Hoe betrouwbaar zijn de meldingen?
-              </dt>
+              <dt className="font-medium">Hoe betrouwbaar zijn de meldingen?</dt>
               <dd className="text-gray-600">
                 Meldingen komen volledig van gebruikers. Bij elke machine zie je
                 hoeveel meldingen er zijn en hoe recent de laatste is. Meer

@@ -11,6 +11,11 @@ import {
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
+import {
+  fetchLocationsShared,
+  type ApiLocation,
+  type ApiStatus,
+} from "@/lib/locationsClient";
 
 type LeafletAPI = {
   MapContainer: any;
@@ -22,33 +27,21 @@ type LeafletAPI = {
 
 type LastReport = {
   id: string;
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
-  note: string;
+  status: ApiStatus;
+  note: string | null;
   createdAt: string;
 };
 
-type LocationItem = {
-  id: string;
-  name: string;
-  retailer: string;
-  lat: number;
-  lng: number;
-  address: string;
-  city: string;
-  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
-  lastReportAt?: string | null;
-  lastReports?: LastReport[];
-  totalReports?: number;
-};
+type LocationItem = ApiLocation;
 
-function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
+function colorForStatus(s: ApiStatus | null) {
   if (s === "WORKING") return "#22c55e"; // green-500
   if (s === "ISSUES") return "#eab308"; // yellow-500
   if (s === "OUT_OF_ORDER") return "#ef4444"; // red-500
   return "#9ca3af"; // gray-400
 }
 
-function statusLabel(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER") {
+function statusLabel(s: ApiStatus) {
   if (s === "WORKING") return "Werkend";
   if (s === "ISSUES") return "Problemen";
   return "Stuk";
@@ -69,7 +62,8 @@ function timeAgo(iso?: string | null) {
 }
 
 function confidenceText(total?: number) {
-  if (!total || total < 1) return "Nog weinig meldingen (lage betrouwbaarheid).";
+  if (!total || total < 1)
+    return "Nog weinig meldingen (lage betrouwbaarheid).";
   if (total < 5) return `Enkele meldingen (${total}).`;
   return `Betrouwbare status (${total}+ meldingen).`;
 }
@@ -81,7 +75,6 @@ export default function MapView() {
   const [loadingMap, setLoadingMap] = useState(true);
 
   const [q, setQ] = useState("");
-  // FILTER: alleen Alle / Werkend / Stuk
   const [statusFilter, setStatusFilter] = useState<
     "ALL" | "WORKING" | "OUT_OF_ORDER"
   >("ALL");
@@ -91,29 +84,33 @@ export default function MapView() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [centeredOnUser, setCenteredOnUser] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [userInteracted, setUserInteracted] = useState(false);
+
+  const [controlsOpen, setControlsOpen] = useState(true);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  // keep refs to markers so we can open popups programmatically
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
-  const fetchLocations = useCallback(async () => {
-    try {
-      const r = await fetch("/api/locations");
-      const d = await r.json();
-      setLocations(Array.isArray(d.locations) ? d.locations : []);
-    } catch {
-      setLocations([]);
-    }
-  }, []);
+  // Shared loader using the client cache
+  const loadLocations = useCallback(
+    async (force = false) => {
+      try {
+        const list = await fetchLocationsShared(force);
+        setLocations(list);
+      } catch (e) {
+        console.error("MapView: failed to load locations", e);
+        setLocations([]);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    fetchLocations();
-  }, [fetchLocations]);
+    loadLocations(false);
+  }, [loadLocations]);
 
-  // compute latest update time for trust indicator
+  // Compute latest update time
   useEffect(() => {
     if (!locations.length) {
       setLastUpdatedAt(null);
@@ -154,42 +151,56 @@ export default function MapView() {
     };
   }, []);
 
-  // user geolocation
+  // Load last known position from localStorage (fast) before geolocation
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("statiestatus:lastPosition");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number"
+        ) {
+          setPos({ lat: parsed.lat, lng: parsed.lng });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // user geolocation (updates pos + localStorage)
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        const coords = {
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+        };
+        setPos(coords);
+        try {
+          window.localStorage.setItem(
+            "statiestatus:lastPosition",
+            JSON.stringify(coords)
+          );
+        } catch {
+          // ignore
+        }
       },
       () => {},
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 15000 }
     );
-  }, []);
-
-  // dark mode detection
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setIsDarkMode(mq.matches);
-
-    const handler = (event: MediaQueryListEvent) => {
-      setIsDarkMode(event.matches);
-    };
-
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
   }, []);
 
   const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
     let list = locations;
-
     if (statusFilter !== "ALL") {
       list = list.filter((l) => l.currentStatus === statusFilter);
     }
-
     return list;
   }, [locations, statusFilter]);
 
@@ -208,7 +219,6 @@ export default function MapView() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
-  // center map on a cluster of results (for "Utrecht" etc.)
   function centerOnSearchResults() {
     if (!map) return;
     const list = filtered;
@@ -225,12 +235,10 @@ export default function MapView() {
     map.setView(center, 13);
   }
 
-  // center map on location and optionally open popup
   function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
 
     setUserInteracted(true);
-
     map.setView([l.lat, l.lng], 16);
 
     setHighlightId(l.id);
@@ -295,9 +303,36 @@ export default function MapView() {
 
   return (
     <div className="relative">
-      {/* Search + filters – centered on mobile, right on desktop */}
-      <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0">
-        <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md md:shadow-lg p-3 w-[92vw] max-w-[360px] sm:w-[280px]">
+      {/* Controls wrapper (positioned) */}
+      <div className="absolute z-[900] top-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0 w-[92vw] max-w-[360px] sm:w-[280px]">
+        {/* Mobile toggle pill */}
+        <div className="sm:hidden mb-2 flex justify-center">
+          {controlsOpen ? (
+            <button
+              type="button"
+              onClick={() => setControlsOpen(false)}
+              className="inline-flex items-center gap-1 rounded-full bg-white/95 border border-gray-200 px-3 py-1 text-[11px] shadow-sm"
+            >
+              ⬇ Kaart groter maken
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setControlsOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full bg-white/95 border border-gray-200 px-3 py-1 text-[11px] shadow-sm"
+            >
+              🔍 Filter & zoeken
+            </button>
+          )}
+        </div>
+
+        {/* Main controls card */}
+        <div
+          className={
+            "bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md md:shadow-lg p-3 max-h-[70vh] overflow-y-auto " +
+            (controlsOpen ? "block" : "hidden sm:block")
+          }
+        >
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
             <span>
               Laatste update:{" "}
@@ -362,7 +397,7 @@ export default function MapView() {
           )}
 
           {q && (
-            <ul className="max-h-52 overflow-auto mt-2 divide-y border rounded-lg bg-white">
+            <ul className="max-h-40 overflow-auto mt-2 divide-y border rounded-lg bg-white">
               {filtered.slice(0, 8).map((l) => (
                 <li
                   key={l.id}
@@ -370,6 +405,7 @@ export default function MapView() {
                   onClick={() => {
                     focusLocation(l, true);
                     setQ("");
+                    setControlsOpen(false);
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
                 >
@@ -387,6 +423,7 @@ export default function MapView() {
         </div>
       </div>
 
+      {/* Map itself */}
       <div className="w-full h-[60vh] md:h-[70vh]">
         <MapContainer
           center={defaultCenter}
@@ -407,7 +444,7 @@ export default function MapView() {
               center={[pos.lat, pos.lng]}
               radius={7}
               pathOptions={{
-                color: isDarkMode ? "#020617" : "#ffffff",
+                color: "#ffffff",
                 weight: 3,
                 fillColor: "#2563eb",
                 fillOpacity: 0.98,
@@ -416,9 +453,7 @@ export default function MapView() {
           )}
 
           {visibleLocations.map((l) => {
-            const baseFill = colorForStatus(l.currentStatus);
-            const fillColor =
-              !l.currentStatus && isDarkMode ? "#e5e7eb" : baseFill;
+            const fillColor = colorForStatus(l.currentStatus);
 
             return (
               <CircleMarker
@@ -426,7 +461,7 @@ export default function MapView() {
                 center={[l.lat, l.lng]}
                 radius={highlightId === l.id ? 11 : 8}
                 pathOptions={{
-                  color: isDarkMode ? "#020617" : "#ffffff",
+                  color: "#ffffff",
                   weight: highlightId === l.id ? 4 : 3,
                   fillColor,
                   fillOpacity: 0.98,
@@ -492,7 +527,10 @@ export default function MapView() {
                         <div className="font-medium">Recente meldingen</div>
                         <ul className="space-y-1">
                           {l.lastReports.map((r) => (
-                            <li key={r.id} className="flex items-start gap-2">
+                            <li
+                              key={r.id}
+                              className="flex items-start gap-2"
+                            >
                               <span className="shrink-0 mt-0.5">
                                 <StatusDot status={r.status} />
                               </span>
@@ -514,7 +552,7 @@ export default function MapView() {
                     <ReportForm
                       locationId={l.id}
                       onSuccess={async () => {
-                        await fetchLocations();
+                        await loadLocations(true);
                         showToast("✅ Bedankt! Melding geplaatst.");
                       }}
                     />
@@ -526,7 +564,7 @@ export default function MapView() {
         </MapContainer>
       </div>
 
-      <Legend isDarkMode={isDarkMode} />
+      <Legend />
 
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 sm:left-auto sm:right-4 sm:translate-x-0 z-[1100]">
@@ -544,9 +582,9 @@ export default function MapView() {
 function StatusBadge({
   status,
 }: {
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
+  status: ApiStatus | null;
 }) {
-  const label = status ? statusLabel(status as any) : "Onbekend";
+  const label = status ? statusLabel(status as ApiStatus) : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-emerald-200 text-emerald-900"
@@ -565,7 +603,7 @@ function StatusBadge({
 function StatusDot({
   status,
 }: {
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+  status: ApiStatus;
 }) {
   const color = colorForStatus(status);
   return (
@@ -582,15 +620,14 @@ function StatusDot({
   );
 }
 
-function Legend({ isDarkMode }: { isDarkMode: boolean }) {
-  // geen "Problemen" meer in de legenda
+function Legend() {
   const items: Array<{ label: string; color: string }> = [
     { label: "Werkend", color: colorForStatus("WORKING") },
     { label: "Stuk", color: colorForStatus("OUT_OF_ORDER") },
     { label: "Onbekend", color: colorForStatus(null) },
   ];
 
-  const labelColor = isDarkMode ? "#e5e7eb" : "#374151";
+  const labelColor = "#374151";
 
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-xs px-3 pb-3">
@@ -631,9 +668,7 @@ function ReportForm({
   locationId: string;
   onSuccess?: () => void | Promise<void>;
 }) {
-  const [status, setStatus] = useState<"WORKING" | "OUT_OF_ORDER">(
-    "WORKING"
-  );
+  const [status, setStatus] = useState<"WORKING" | "OUT_OF_ORDER">("WORKING");
   const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -649,7 +684,7 @@ function ReportForm({
         ? ISSUE_LABELS[issueType]
         : "";
 
-    const pieces = [];
+    const pieces: string[] = [];
     if (reason) pieces.push(reason);
     if (note.trim()) pieces.push(note.trim());
     const finalNote = pieces.join(" — ");

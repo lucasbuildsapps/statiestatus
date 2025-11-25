@@ -3,19 +3,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useFavorites from "@/lib/useFavorites";
+import {
+  fetchLocationsShared,
+  type ApiLocation,
+  type ApiStatus,
+} from "@/lib/locationsClient";
 
-type LocationItem = {
-  id: string;
-  name: string;
-  retailer: string;
-  lat: number;
-  lng: number;
-  address: string;
-  city: string;
-  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
-  lastReportAt?: string | null;
-  totalReports?: number;
-};
+type LocationItem = ApiLocation;
 
 type LocationWithDistance = LocationItem & {
   distanceKm: number | null;
@@ -35,9 +29,7 @@ function timeAgo(iso?: string | null) {
   return `${d}d geleden`;
 }
 
-function statusLabel(
-  s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null
-): string {
+function statusLabel(s: ApiStatus | null): string {
   if (s === "WORKING") return "Werkend";
   if (s === "ISSUES") return "Problemen";
   if (s === "OUT_OF_ORDER") return "Stuk";
@@ -67,28 +59,49 @@ export default function NearbyList() {
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [geoError, setGeoError] = useState(false);
+  const [locationResolved, setLocationResolved] = useState(false);
+
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  // locaties ophalen
+  // 1) Load last known position from localStorage
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("statiestatus:lastPosition");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number"
+        ) {
+          setPos({ lat: parsed.lat, lng: parsed.lng });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // 2) Fetch locations using shared cache
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/locations");
-        const data = await res.json();
+        const data = await fetchLocationsShared(false);
         if (!cancelled) {
-          setLocations(Array.isArray(data.locations) ? data.locations : []);
+          setLocations(data);
           setError(null);
         }
       } catch (err) {
+        console.error(err);
         if (!cancelled) {
-          console.error(err);
           setError("Kon locaties niet laden.");
           setLocations([]);
         }
@@ -101,32 +114,42 @@ export default function NearbyList() {
     };
   }, []);
 
-  // geolocatie
+  // 3) Geolocation
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setGeoError(true);
+      setLocationResolved(true);
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        const coords = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setPos(coords);
+        setLocationResolved(true);
+        try {
+          window.localStorage.setItem(
+            "statiestatus:lastPosition",
+            JSON.stringify(coords)
+          );
+        } catch {
+          // ignore
+        }
       },
       (err) => {
         console.error(err);
         setGeoError(true);
+        setLocationResolved(true);
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 15000 }
     );
   }, []);
 
-  // locaties verrijken met afstand (als bekend)
+  // Enrich with distance
   const enriched: LocationWithDistance[] = useMemo(
     () =>
       locations.map((l) => ({
         ...l,
-        distanceKm: pos
-          ? distanceKm(pos.lat, pos.lng, l.lat, l.lng)
-          : null,
+        distanceKm: pos ? distanceKm(pos.lat, pos.lng, l.lat, l.lng) : null,
       })),
     [locations, pos]
   );
@@ -136,7 +159,6 @@ export default function NearbyList() {
     [enriched, isFavorite]
   );
 
-  // ALTIJD een lijst tonen, ook zonder pos
   const nearbyLocations: LocationWithDistance[] = useMemo(() => {
     const sorted = [...enriched];
     sorted.sort((a, b) => {
@@ -162,7 +184,8 @@ export default function NearbyList() {
     locationId: string,
     status: "WORKING" | "OUT_OF_ORDER"
   ) {
-    setSubmittingId(`${locationId}-${status}`);
+    const key = `${locationId}-${status}`;
+    setSubmittingId(key);
     setMessage(null);
     try {
       const res = await fetch("/api/reports", {
@@ -172,7 +195,9 @@ export default function NearbyList() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessage(data?.error || "Er ging iets mis bij het verzenden.");
+        setMessage(
+          data?.error || "Er ging iets mis bij het verzenden."
+        );
         return;
       }
       setMessage("✅ Bedankt! Snelmelding geplaatst.");
@@ -182,6 +207,8 @@ export default function NearbyList() {
       setSubmittingId(null);
     }
   }
+
+  const hasRealLocation = !!pos && !geoError;
 
   return (
     <section className="space-y-4 text-sm">
@@ -277,7 +304,9 @@ export default function NearbyList() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => quickReport(l.id, "OUT_OF_ORDER")}
+                      onClick={() =>
+                        quickReport(l.id, "OUT_OF_ORDER")
+                      }
                       disabled={submittingId === keyOut}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
@@ -304,14 +333,19 @@ export default function NearbyList() {
       <div className="space-y-2 pt-2 border-t">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Machines in de buurt</span>
-          {pos && <span>Gebaseerd op jouw locatie</span>}
+          {hasRealLocation && <span>Gebaseerd op jouw locatie</span>}
         </div>
 
-        {!pos && !loading && (
+        {!locationResolved && (
           <p className="text-xs text-gray-500">
-            {geoError
-              ? "We hebben geen toegang tot je locatie. We tonen een algemene lijst met locaties; gebruik de kaart voor exacte posities."
-              : "We bepalen je locatie om machines in de buurt te tonen… ondertussen tonen we een paar willekeurige locaties."}
+            We bepalen je locatie om machines in de buurt te tonen…
+          </p>
+        )}
+
+        {geoError && (
+          <p className="text-xs text-gray-500">
+            We hebben geen toegang tot je locatie. We tonen een algemene
+            lijst met locaties; gebruik de kaart voor exacte posities.
           </p>
         )}
 

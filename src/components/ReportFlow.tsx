@@ -7,6 +7,10 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import {
+  fetchLocationsShared,
+  type ApiLocation,
+} from "@/lib/locationsClient";
 
 type Machine = {
   id: string;
@@ -81,17 +85,15 @@ export default function ReportFlow() {
 
   const [search, setSearch] = useState("");
 
-  // fetch machines on mount
+  // fetch machines from shared cache
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoadingMachines(true);
-        const res = await fetch("/api/locations");
-        const data = await res.json();
+        const data = await fetchLocationsShared(false);
         if (!cancelled) {
-          const raw = Array.isArray(data.locations) ? data.locations : [];
-          const mapped: Machine[] = raw.map((l: any) => ({
+          const mapped: Machine[] = data.map((l: ApiLocation) => ({
             id: l.id,
             name: l.name,
             retailer: l.retailer,
@@ -252,7 +254,9 @@ export default function ReportFlow() {
 
       const data = await res.json();
       if (!res.ok) {
-        setSubmitError(data?.error || "Er ging iets mis bij het verzenden.");
+        setSubmitError(
+          data?.error || "Er ging iets mis bij het verzenden."
+        );
         setScreen("report");
         return;
       }
@@ -291,8 +295,8 @@ export default function ReportFlow() {
           Hoe werkt de machine nu?
         </h1>
         <p className="text-sm text-gray-600">
-          Je helpt anderen door te melden of de statiegeldmachine op dit moment
-          werkt. Geen account nodig, meldingen zijn anoniem.
+          Je helpt anderen door te melden of de statiegeldmachine op dit
+          moment werkt. Geen account nodig, meldingen zijn anoniem.
         </p>
       </header>
 
@@ -340,8 +344,8 @@ export default function ReportFlow() {
         <section className="rounded-2xl border bg-white shadow-sm p-5 space-y-3 text-sm text-center">
           <p className="font-medium">Locatie bepalen…</p>
           <p className="text-xs text-gray-500">
-            Dit duurt meestal maar een paar seconden. Zorg dat locatie-toegang
-            is toegestaan voor deze site.
+            Dit duurt meestal maar een paar seconden. Zorg dat
+            locatie-toegang is toegestaan voor deze site.
           </p>
           <button
             type="button"
@@ -394,8 +398,8 @@ export default function ReportFlow() {
           <p className="font-medium">Zoek je machine</p>
           {geoError && (
             <p className="text-[11px] text-gray-500">
-              Locatie-toegang is niet beschikbaar. Kies hieronder handmatig de
-              juiste machine.
+              Locatie-toegang is niet beschikbaar. Kies hieronder
+              handmatig de juiste machine.
             </p>
           )}
           <input
@@ -564,7 +568,9 @@ export default function ReportFlow() {
                 disabled={worksNow === null || screen === "submitting"}
                 className="w-full rounded-lg bg-black text-white text-sm px-4 py-2.5 disabled:opacity-60"
               >
-                {screen === "submitting" ? "Melding versturen…" : "Melding plaatsen"}
+                {screen === "submitting"
+                  ? "Melding versturen…"
+                  : "Melding plaatsen"}
               </button>
 
               <button
@@ -596,8 +602,8 @@ export default function ReportFlow() {
               Bedankt voor je melding! 🎉
             </h2>
             <p className="text-xs text-gray-600 max-w-xs mx-auto">
-              Je helpt anderen om een kapotte machine te vermijden en maakt de
-              gegevens op statiestatus.nl betrouwbaarder.
+              Je helpt anderen om een kapotte machine te vermijden en maakt
+              de gegevens op statiestatus.nl betrouwbaarder.
             </p>
           </div>
           <div className="flex flex-col gap-2 pt-2">

@@ -1,4 +1,4 @@
-// app/api/locations/route.ts
+// src/app/api/locations/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deriveStatus } from "@/lib/derive";
@@ -36,15 +36,23 @@ export async function GET() {
       })),
     }));
 
+    // Cached at Vercel edge: up to 60s fresh, 5min stale-while-revalidate
     return NextResponse.json(
       { locations: data },
-      { headers: { "Cache-Control": "s-maxage=60" } }
+      {
+        headers: {
+          "Cache-Control": "s-maxage=60, stale-while-revalidate=300",
+        },
+      }
     );
   } catch (err) {
     console.error("GET /api/locations error:", err);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500, headers: { "Cache-Control": "no-store, max-age=0" } }
+      {
+        status: 500,
+        headers: { "Cache-Control": "no-store, max-age=0" },
+      }
     );
   }
 }
