@@ -81,8 +81,9 @@ export default function MapView() {
   const [loadingMap, setLoadingMap] = useState(true);
 
   const [q, setQ] = useState("");
+  // FILTER: alleen Alle / Werkend / Stuk
   const [statusFilter, setStatusFilter] = useState<
-    "ALL" | "WORKING" | "ISSUES" | "OUT_OF_ORDER"
+    "ALL" | "WORKING" | "OUT_OF_ORDER"
   >("ALL");
   const [toast, setToast] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export default function MapView() {
   const [centeredOnUser, setCenteredOnUser] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [userInteracted, setUserInteracted] = useState(false);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -183,9 +185,11 @@ export default function MapView() {
 
   const visibleLocations = useMemo(() => {
     let list = locations;
+
     if (statusFilter !== "ALL") {
       list = list.filter((l) => l.currentStatus === statusFilter);
     }
+
     return list;
   }, [locations, statusFilter]);
 
@@ -204,9 +208,28 @@ export default function MapView() {
     window.setTimeout(() => setToast(null), 2600);
   }
 
+  // center map on a cluster of results (for "Utrecht" etc.)
+  function centerOnSearchResults() {
+    if (!map) return;
+    const list = filtered;
+    if (!list.length) return;
+
+    const latSum = list.reduce((sum, l) => sum + l.lat, 0);
+    const lngSum = list.reduce((sum, l) => sum + l.lng, 0);
+    const center: [number, number] = [
+      latSum / list.length,
+      lngSum / list.length,
+    ];
+
+    setUserInteracted(true);
+    map.setView(center, 13);
+  }
+
   // center map on location and optionally open popup
   function focusLocation(l: LocationItem, openPopup: boolean) {
     if (!map) return;
+
+    setUserInteracted(true);
 
     map.setView([l.lat, l.lng], 16);
 
@@ -261,11 +284,11 @@ export default function MapView() {
     }, [m]);
 
     useEffect(() => {
-      if (m && pos && !centeredOnUser) {
+      if (m && pos && !centeredOnUser && !userInteracted) {
         m.setView([pos.lat, pos.lng], 14);
         setCenteredOnUser(true);
       }
-    }, [m, pos, centeredOnUser]);
+    }, [m, pos, centeredOnUser, userInteracted]);
 
     return null;
   }
@@ -288,6 +311,12 @@ export default function MapView() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                centerOnSearchResults();
+              }
+            }}
             placeholder="Zoek op naam, winkel, stad…"
             className="w-full text-sm px-3 py-2 border rounded-lg"
           />
@@ -296,7 +325,6 @@ export default function MapView() {
             {[
               { id: "ALL", label: "Alle" },
               { id: "WORKING", label: "Werkend" },
-              { id: "ISSUES", label: "Problemen" },
               { id: "OUT_OF_ORDER", label: "Stuk" },
             ].map((btn) => {
               const active = statusFilter === btn.id;
@@ -324,6 +352,7 @@ export default function MapView() {
             <button
               type="button"
               onClick={() => {
+                setUserInteracted(true);
                 map.setView([pos.lat, pos.lng], 15);
               }}
               className="mt-3 w-full text-xs px-3 py-2 rounded-lg border bg-gray-50 hover:bg-gray-100 flex items-center justify-center gap-1"
@@ -554,9 +583,9 @@ function StatusDot({
 }
 
 function Legend({ isDarkMode }: { isDarkMode: boolean }) {
+  // geen "Problemen" meer in de legenda
   const items: Array<{ label: string; color: string }> = [
     { label: "Werkend", color: colorForStatus("WORKING") },
-    { label: "Problemen", color: colorForStatus("ISSUES") },
     { label: "Stuk", color: colorForStatus("OUT_OF_ORDER") },
     { label: "Onbekend", color: colorForStatus(null) },
   ];

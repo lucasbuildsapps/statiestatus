@@ -1,38 +1,53 @@
 // src/components/NavBar.tsx
 "use client";
 
-import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const navItems = [
+  { href: "#kaart", label: "Kaart", type: "anchor" as const },
+  { href: "#nearby", label: "In de buurt", type: "anchor" as const },
+  { href: "#about", label: "Over", type: "anchor" as const },
+  { href: "#contact", label: "Contact", type: "anchor" as const },
+  { href: "/stats", label: "Stats", type: "link" as const },
+];
 
 export default function NavBar() {
+  const pathname = usePathname();
+
   return (
-    <header className="border-b bg-white/80 backdrop-blur">
-      <div className="max-w-5xl mx-auto flex items-center justify-between px-4 md:px-6 py-3">
-        <a href="#top" className="flex items-center gap-2">
-          <Image
-            src="/icon.svg"
-            alt="statiestatus.nl"
-            width={24}
-            height={24}
-          />
-          <span className="font-semibold text-sm sm:text-base">
-            statiestatus.nl
-          </span>
-        </a>
-        <nav className="flex items-center gap-3 text-xs sm:text-sm text-gray-700">
-          <a href="#kaart" className="hover:text-black">
-            Kaart
-          </a>
-          <a href="#nearby" className="hover:text-black">
-            In de buurt
-          </a>
-          <a href="#about" className="hover:text-black">
-            Over
-          </a>
-          <a href="#contact" className="hover:text-black">
-            Contact
-          </a>
-        </nav>
-      </div>
+    <header className="border-b bg-white/90 backdrop-blur">
+      <nav className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 h-12 flex items-center justify-between text-sm">
+        <Link href="/" className="font-semibold">
+          statiestatus.nl
+        </Link>
+        <div className="flex gap-4 text-xs sm:text-sm">
+          {navItems.map((item) =>
+            item.type === "anchor" ? (
+              <a
+                key={item.href}
+                href={item.href}
+                className="text-gray-700 hover:text-black"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={
+                  "hover:text-black " +
+                  (pathname === item.href
+                    ? "text-black font-medium"
+                    : "text-gray-700")
+                }
+              >
+                {item.label}
+              </Link>
+            )
+          )}
+        </div>
+      </nav>
     </header>
   );
 }

@@ -74,7 +74,7 @@ export default function NearbyList() {
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  // fetch locations
+  // locaties ophalen
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -101,7 +101,7 @@ export default function NearbyList() {
     };
   }, []);
 
-  // geolocation
+  // geolocatie
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setGeoError(true);
@@ -119,6 +119,7 @@ export default function NearbyList() {
     );
   }, []);
 
+  // locaties verrijken met afstand (als bekend)
   const enriched: LocationWithDistance[] = useMemo(
     () =>
       locations.map((l) => ({
@@ -135,18 +136,19 @@ export default function NearbyList() {
     [enriched, isFavorite]
   );
 
+  // ALTIJD een lijst tonen, ook zonder pos
   const nearbyLocations: LocationWithDistance[] = useMemo(() => {
-    if (!pos) {
-      // No location yet or denied: don't show random machines
-      return [];
-    }
-    const sorted = [...enriched].sort((a, b) => {
+    const sorted = [...enriched];
+    sorted.sort((a, b) => {
       const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
       const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
-      return da - db;
+
+      if (da !== db) return da - db;
+      return a.name.localeCompare(b.name);
     });
-    return sorted.slice(0, 5); // max 5 for visibility
-  }, [enriched, pos]);
+
+    return sorted.slice(0, 5);
+  }, [enriched]);
 
   function formatDistance(d: number | null) {
     if (d == null || !isFinite(d)) return "Afstand onbekend";
@@ -207,7 +209,7 @@ export default function NearbyList() {
         </div>
       )}
 
-      {/* Favourites */}
+      {/* Favorieten */}
       {favoriteLocations.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
@@ -308,15 +310,14 @@ export default function NearbyList() {
         {!pos && !loading && (
           <p className="text-xs text-gray-500">
             {geoError
-              ? "We hebben geen toegang tot je locatie. Gebruik de kaart hierboven om een machine te vinden, of voeg zelf een locatie toe."
-              : "We bepalen je locatie om machines in de buurt te tonen…"}
+              ? "We hebben geen toegang tot je locatie. We tonen een algemene lijst met locaties; gebruik de kaart voor exacte posities."
+              : "We bepalen je locatie om machines in de buurt te tonen… ondertussen tonen we een paar willekeurige locaties."}
           </p>
         )}
 
-        {nearbyLocations.length === 0 && pos && !loading && (
+        {nearbyLocations.length === 0 && !loading && (
           <p className="text-xs text-gray-500">
-            Geen locaties in de buurt gevonden. Zoom verder uit op de kaart
-            hierboven om meer machines te zien.
+            Geen locaties gevonden. Probeer de kaart hierboven.
           </p>
         )}
 
