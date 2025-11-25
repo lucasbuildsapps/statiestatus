@@ -1,12 +1,12 @@
 // src/app/page.tsx
 "use client";
 
+import Link from "next/link";
 import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import ContactForm from "../components/ContactForm";
 import PrivacyNote from "../components/PrivacyNote";
-import AddMachineForm from "../components/AddMachineForm";
 
 export default function Page() {
   return (
@@ -15,23 +15,26 @@ export default function Page() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
         {/* HERO */}
-        <section className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Live community project in Nederland
+        <section className="space-y-4 md:space-y-5">
+          <div className="space-y-3 md:space-y-4 max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Live community project in Nederland
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
+              statiestatus.nl
+            </h1>
+
+            <p className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+              Controleer of een statiegeldmachine werkt en help anderen door de
+              status te rapporteren. Geen account nodig, geen reclame, volledig
+              community-gedreven.
+            </p>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-            statiestatus.nl
-          </h1>
-
-          <p className="text-gray-700 dark:text-gray-200 max-w-2xl mx-auto text-sm sm:text-base">
-            Controleer of een statiegeldmachine werkt en help anderen door de
-            status te rapporteren. Geen account nodig, volledig community-gedreven.
-          </p>
-
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Laatste update: real-time uit community meldingen • gegevens zijn
+            Laatste update: real-time uit community-meldingen • gegevens zijn
             indicatief en niet officieel.
           </p>
         </section>
@@ -84,12 +87,21 @@ export default function Page() {
             </ul>
             <div className="border-t pt-3 space-y-1 text-xs text-gray-500">
               <p>
-                Dit is een onafhankelijk project, niet gekoppeld aan supermarkten
-                of fabrikanten.
+                Dit is een onafhankelijk project, niet gekoppeld aan
+                supermarkten of fabrikanten.
               </p>
               <p>
                 Status kan afwijken van de werkelijkheid; check altijd ook ter
                 plekke.
+              </p>
+              <p>
+                Nieuwsgierig naar gemiddelden en trends?{" "}
+                <Link
+                  href="/stats"
+                  className="underline hover:text-gray-700"
+                >
+                  Bekijk de statistiekenpagina.
+                </Link>
               </p>
             </div>
           </section>
@@ -107,7 +119,7 @@ export default function Page() {
                 1. Zoek een machine
               </div>
               <p>
-                Gebruik de kaart of lijst &ldquo;In de buurt&rdquo; om jouw
+                Gebruik de kaart of de lijst &ldquo;In de buurt&rdquo; om jouw
                 statiegeldmachine te vinden.
               </p>
             </div>
@@ -116,8 +128,8 @@ export default function Page() {
                 2. Check de status
               </div>
               <p>
-                Bekijk recente meldingen van andere gebruikers en de huidige status
-                (werkend, problemen, stuk).
+                Bekijk recente meldingen van andere gebruikers en de huidige
+                status (werkend of stuk).
               </p>
             </div>
             <div className="rounded-xl border bg-gray-50 p-3">
@@ -137,7 +149,9 @@ export default function Page() {
           id="trust"
           className="rounded-2xl border bg-white shadow-sm p-6 space-y-4"
         >
-          <h2 className="text-lg font-semibold">Transparant & privacy-vriendelijk</h2>
+          <h2 className="text-lg font-semibold">
+            Transparant & privacy-vriendelijk
+          </h2>
           <div className="grid sm:grid-cols-3 gap-4 text-sm text-gray-700">
             <div>
               <div className="font-medium mb-1">Community-data</div>
@@ -157,34 +171,69 @@ export default function Page() {
               <div className="font-medium mb-1">Feedback welkom</div>
               <p>
                 Foutje gezien of idee voor verbetering? Laat het weten via het
-                contactformulier hieronder.
+                formulier hieronder.
               </p>
             </div>
           </div>
         </section>
 
-        {/* ADD MACHINE */}
+        {/* FAQ */}
         <section
-          id="add-machine"
-          className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
+          id="faq"
+          className="rounded-2xl border bg-white shadow-sm p-6 space-y-4"
         >
-          <h2 className="text-lg font-semibold">Mist er een machine?</h2>
-          <p className="text-sm text-gray-700">
-            Zie je een statiegeldmachine die nog niet op de kaart staat? Stuur de
-            gegevens in en we voegen hem zo snel mogelijk toe.
-          </p>
-          <AddMachineForm />
+          <h2 className="text-lg font-semibold">Veelgestelde vragen</h2>
+          <dl className="space-y-3 text-sm text-gray-700">
+            <div>
+              <dt className="font-medium">
+                Hoe betrouwbaar zijn de meldingen?
+              </dt>
+              <dd className="text-gray-600">
+                Meldingen komen volledig van gebruikers. Bij elke machine zie je
+                hoeveel meldingen er zijn en hoe recent de laatste is. Meer
+                meldingen en een recente update betekenen meestal een
+                betrouwbaardere status.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Hoe vaak wordt de kaart bijgewerkt?</dt>
+              <dd className="text-gray-600">
+                Zodra iemand een melding plaatst wordt de kaart direct
+                bijgewerkt. De tekst &ldquo;Laatste update&rdquo; boven de kaart
+                is gebaseerd op de meest recente melding in heel Nederland.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Wat doe je tegen misbruik?</dt>
+              <dd className="text-gray-600">
+                Meldingen zijn anoniem, maar IP-adressen worden gehasht zodat
+                herhaald misbruik opgespoord kan worden. Bij opvallende patronen
+                kunnen meldingen worden gefilterd of handmatig aangepast.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">
+                Is dit een officiële dienst van supermarkten?
+              </dt>
+              <dd className="text-gray-600">
+                Nee. statiestatus.nl is een onafhankelijk community-project. De
+                gegevens zijn indicatief en geen officiële bron van supermarkten
+                of fabrikanten.
+              </dd>
+            </div>
+          </dl>
         </section>
 
-        {/* CONTACT */}
+        {/* CONTACT & NIEUWE MACHINE IN ÉÉN */}
         <section
           id="contact"
-          className="rounded-2xl border bg-white shadow-sm p-6 space-y-3"
+          className="rounded-2xl border bg-white shadow-sm p-6 space-y-4"
         >
-          <h2 className="text-lg font-semibold">Contact & feedback</h2>
+          <h2 className="text-lg font-semibold">Nieuwe machine of feedback?</h2>
           <p className="text-sm text-gray-700">
-            Suggesties, bugs of wil je helpen? Stuur een bericht via het formulier
-            hieronder.
+            Zie je een statiegeldmachine die nog ontbreekt, of heb je een vraag
+            of suggestie? Gebruik het formulier hieronder om een nieuwe locatie
+            door te geven of algemene feedback te sturen.
           </p>
           <ContactForm />
         </section>
