@@ -1,77 +1,85 @@
-// src/app/api/locations/route.ts
+// src/app/api/reports/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
 
-export type ApiLocation = {
-  id: string;
-  name: string;
-  retailer: string;
-  lat: number;
-  lng: number;
-  address: string;
-  city: string;
-  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
-  lastReportAt: string | null;
-  totalReports: number;
-  lastReports: {
-    id: string;
-    status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
-    note: string;
-    createdAt: string;
-  }[];
+type ReportStatus = "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+
+type PostBody = {
+  locationId?: string;
+  status?: ReportStatus;
+  note?: string;
 };
 
-export async function GET() {
+// Kleine helper om een hash van het IP-adres te maken
+function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(ip).digest("hex");
+}
+
+export async function POST(req: Request) {
   try {
-    const locations = await prisma.location.findMany({
-      orderBy: { name: "asc" },
-      include: {
-        reports: {
-          orderBy: { createdAt: "desc" },
-          take: 3,
-        },
-        _count: {
-          select: { reports: true },
-        },
+    // 1. Body uitlezen als JSON
+    const body = (await req.json()) as PostBody;
+
+    const locationId = body.locationId?.trim();
+    const status = body.status;
+    // altijd een string, lege string als er geen notitie is
+    const note = body.note?.trim() ?? "";
+
+    // 2. Basisvalidatie
+    if (!locationId) {
+      return NextResponse.json(
+        { ok: false, error: "locationId ontbreekt." },
+        { status: 400 }
+      );
+    }
+
+    if (!status || !["WORKING", "ISSUES", "OUT_OF_ORDER"].includes(status)) {
+      return NextResponse.json(
+        { ok: false, error: "status is ongeldig." },
+        { status: 400 }
+      );
+    }
+
+    // 3. IP bepalen en hashen (voor anti-spam / statistiek)
+    const xff = req.headers.get("x-forwarded-for") || "";
+    const realIp = req.headers.get("x-real-ip") || "";
+    const rawIp =
+      xff.split(",")[0].trim() || realIp || "unknown"; // eerste IP uit de x-forwarded-for chain
+    const ipHash = hashIp(rawIp);
+
+    // 4. Nieuwe melding opslaan in de database
+    const report = await prisma.report.create({
+      data: {
+        locationId,
+        status,
+        note,
+        ipHash, // verplicht veld in je Prisma-model
       },
     });
 
-    const payload: ApiLocation[] = locations.map((loc) => {
-      const [latest] = loc.reports;
-      const lastReport = latest ?? null;
-
-      return {
-        id: loc.id,
-        name: loc.name,
-        retailer: loc.retailer,
-        lat: loc.lat,
-        lng: loc.lng,
-        address: loc.address,
-        city: loc.city,
-        currentStatus: lastReport ? lastReport.status : null,
-        lastReportAt: lastReport
-          ? lastReport.createdAt.toISOString()
-          : null,
-        totalReports: loc._count.reports,
-        lastReports: loc.reports.map((r) => ({
-          id: r.id,
-          status: r.status,
-          note: r.note ?? "",
-          createdAt: r.createdAt.toISOString(),
-        })),
-      };
-    });
-
-    return NextResponse.json({ locations: payload });
-  } catch (err) {
-    console.error("Error in /api/locations:", err);
+    // 5. Succes-response voor de frontend
     return NextResponse.json(
-      { locations: [] as ApiLocation[], error: "Failed to load locations" },
+      { ok: true, reportId: report.id },
+      { status: 201 }
+    );
+  } catch (err) {
+    console.error("Error in POST /api/reports:", err);
+    return NextResponse.json(
+      { ok: false, error: "Interne serverfout." },
       { status: 500 }
     );
   }
+}
+
+// Optioneel: eenvoudige GET zodat je geen 405 krijgt als je eens via de browser kijkt
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    message: "Gebruik POST om een melding aan te maken.",
+  });
 }
