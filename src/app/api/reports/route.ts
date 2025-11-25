@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
 
 type ReportStatus = "WORKING" | "ISSUES" | "OUT_OF_ORDER";
 
@@ -14,6 +15,11 @@ type PostBody = {
   note?: string;
 };
 
+// Kleine helper om een hash van het IP-adres te maken
+function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(ip).digest("hex");
+}
+
 export async function POST(req: Request) {
   try {
     // 1. Body uitlezen als JSON
@@ -21,7 +27,7 @@ export async function POST(req: Request) {
 
     const locationId = body.locationId?.trim();
     const status = body.status;
-    // LET OP: altijd een string maken (lege string als er geen notitie is)
+    // altijd een string, lege string als er geen notitie is
     const note = body.note?.trim() ?? "";
 
     // 2. Basisvalidatie
@@ -39,16 +45,24 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Nieuwe melding opslaan in de database
+    // 3. IP bepalen en hashen (voor anti-spam / statistiek)
+    const xff = req.headers.get("x-forwarded-for") || "";
+    const realIp = req.headers.get("x-real-ip") || "";
+    const rawIp =
+      xff.split(",")[0].trim() || realIp || "unknown"; // eerste IP uit de x-forwarded-for chain
+    const ipHash = hashIp(rawIp);
+
+    // 4. Nieuwe melding opslaan in de database
     const report = await prisma.report.create({
       data: {
         locationId,
         status,
-        note, // altijd een string, Prisma is nu blij
+        note,
+        ipHash, // verplicht veld in je Prisma-model
       },
     });
 
-    // 4. Succes-response voor de frontend
+    // 5. Succes-response voor de frontend
     return NextResponse.json(
       { ok: true, reportId: report.id },
       { status: 201 }
