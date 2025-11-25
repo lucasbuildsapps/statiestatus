@@ -11,6 +11,11 @@ import {
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import useFavorites from "@/lib/useFavorites";
+import {
+  fetchLocationsShared,
+  type ApiLocation,
+  type ApiStatus,
+} from "@/lib/locationsClient";
 
 type LeafletAPI = {
   MapContainer: any;
@@ -22,33 +27,21 @@ type LeafletAPI = {
 
 type LastReport = {
   id: string;
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
-  note: string;
+  status: ApiStatus;
+  note: string | null;
   createdAt: string;
 };
 
-type LocationItem = {
-  id: string;
-  name: string;
-  retailer: string;
-  lat: number;
-  lng: number;
-  address: string;
-  city: string;
-  currentStatus: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
-  lastReportAt?: string | null;
-  lastReports?: LastReport[];
-  totalReports?: number;
-};
+type LocationItem = ApiLocation;
 
-function colorForStatus(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null) {
+function colorForStatus(s: ApiStatus | null) {
   if (s === "WORKING") return "#22c55e"; // green-500
   if (s === "ISSUES") return "#eab308"; // yellow-500
   if (s === "OUT_OF_ORDER") return "#ef4444"; // red-500
   return "#9ca3af"; // gray-400
 }
 
-function statusLabel(s: "WORKING" | "ISSUES" | "OUT_OF_ORDER") {
+function statusLabel(s: ApiStatus) {
   if (s === "WORKING") return "Werkend";
   if (s === "ISSUES") return "Problemen";
   return "Stuk";
@@ -93,27 +86,31 @@ export default function MapView() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
-  const [controlsOpen, setControlsOpen] = useState(true); // NEW: toggle controls on mobile
+  const [controlsOpen, setControlsOpen] = useState(true);
 
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
-  const fetchLocations = useCallback(async () => {
-    try {
-      const r = await fetch("/api/locations");
-      const d = await r.json();
-      setLocations(Array.isArray(d.locations) ? d.locations : []);
-    } catch {
-      setLocations([]);
-    }
-  }, []);
+  // Shared loader using the client cache
+  const loadLocations = useCallback(
+    async (force = false) => {
+      try {
+        const list = await fetchLocationsShared(force);
+        setLocations(list);
+      } catch (e) {
+        console.error("MapView: failed to load locations", e);
+        setLocations([]);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    fetchLocations();
-  }, [fetchLocations]);
+    loadLocations(false);
+  }, [loadLocations]);
 
-  // compute latest update time for trust indicator
+  // Compute latest update time
   useEffect(() => {
     if (!locations.length) {
       setLastUpdatedAt(null);
@@ -154,15 +151,46 @@ export default function MapView() {
     };
   }, []);
 
-  // user geolocation
+  // Load last known position from localStorage (fast) before geolocation
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("statiestatus:lastPosition");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number"
+        ) {
+          setPos({ lat: parsed.lat, lng: parsed.lng });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // user geolocation (updates pos + localStorage)
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        const coords = {
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+        };
+        setPos(coords);
+        try {
+          window.localStorage.setItem(
+            "statiestatus:lastPosition",
+            JSON.stringify(coords)
+          );
+        } catch {
+          // ignore
+        }
       },
       () => {},
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 15000 }
     );
   }, []);
 
@@ -377,7 +405,7 @@ export default function MapView() {
                   onClick={() => {
                     focusLocation(l, true);
                     setQ("");
-                    setControlsOpen(false); // auto-collapse after selecting
+                    setControlsOpen(false);
                   }}
                   title={`${l.name} • ${l.retailer} • ${l.city}`}
                 >
@@ -524,7 +552,7 @@ export default function MapView() {
                     <ReportForm
                       locationId={l.id}
                       onSuccess={async () => {
-                        await fetchLocations();
+                        await loadLocations(true);
                         showToast("✅ Bedankt! Melding geplaatst.");
                       }}
                     />
@@ -554,9 +582,9 @@ export default function MapView() {
 function StatusBadge({
   status,
 }: {
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER" | null;
+  status: ApiStatus | null;
 }) {
-  const label = status ? statusLabel(status as any) : "Onbekend";
+  const label = status ? statusLabel(status as ApiStatus) : "Onbekend";
   const color =
     status === "WORKING"
       ? "bg-emerald-200 text-emerald-900"
@@ -575,7 +603,7 @@ function StatusBadge({
 function StatusDot({
   status,
 }: {
-  status: "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+  status: ApiStatus;
 }) {
   const color = colorForStatus(status);
   return (
@@ -599,7 +627,7 @@ function Legend() {
     { label: "Onbekend", color: colorForStatus(null) },
   ];
 
-  const labelColor = "#374151"; // slate-700
+  const labelColor = "#374151";
 
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-xs px-3 pb-3">
