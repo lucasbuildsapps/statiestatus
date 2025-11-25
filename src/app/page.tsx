@@ -13,7 +13,7 @@ export default function Page() {
     <>
       <NavBar />
 
-      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 space-y-6 sm:space-y-8">
         {/* HERO */}
         <section className="space-y-4 md:space-y-5">
           <div className="space-y-3 md:space-y-4 max-w-2xl">
