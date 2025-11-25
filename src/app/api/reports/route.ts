@@ -21,7 +21,8 @@ export async function POST(req: Request) {
 
     const locationId = body.locationId?.trim();
     const status = body.status;
-    const note = body.note?.trim() || null;
+    // LET OP: altijd een string maken (lege string als er geen notitie is)
+    const note = body.note?.trim() ?? "";
 
     // 2. Basisvalidatie
     if (!locationId) {
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
       data: {
         locationId,
         status,
-        note,
+        note, // altijd een string, Prisma is nu blij
       },
     });
 
