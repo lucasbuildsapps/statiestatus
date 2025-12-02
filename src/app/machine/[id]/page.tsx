@@ -7,10 +7,10 @@ import { Status } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { id: string };
+  params: { id?: string };
 };
 
-async function loadLocation(id: string) {
+async function loadLocation(id: string | undefined) {
   try {
     if (!id || typeof id !== "string") return null;
 
@@ -79,7 +79,8 @@ function timeAgo(iso?: Date | string | null) {
 }
 
 export default async function MachinePage({ params }: Props) {
-  const data = await loadLocation(params.id);
+  const id = params?.id;
+  const data = await loadLocation(id);
 
   if (!data) {
     return (
@@ -97,12 +98,29 @@ export default async function MachinePage({ params }: Props) {
           We konden deze statiegeldmachine niet vinden. Mogelijk is de link
           verouderd of is de locatie verwijderd.
         </p>
-        <a
-          href="/#kaart"
-          className="inline-flex items-center text-sm px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-        >
-          ← Terug naar de kaart
-        </a>
+        {id && (
+          <p className="text-[11px] text-gray-400">
+            Gevraagde locatie-ID:{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100">
+              {id}
+            </code>
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2 text-xs pt-2">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
       </main>
     );
   }
@@ -199,8 +217,13 @@ export default async function MachinePage({ params }: Props) {
           )}
         </div>
 
-        {/* NEW: links to city + retailer pages */}
-        <div className="flex flex-wrap gap-2 pt-2 text-xs">
+        <div className="flex flex-wrap gap-2 text-xs pt-2">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
           <a
             href={`/stad/${encodeURIComponent(location.city)}`}
             className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
@@ -212,14 +235,6 @@ export default async function MachinePage({ params }: Props) {
             className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
           >
             Alle machines bij {location.retailer}
-          </a>
-          <a
-            href={`/?location=${encodeURIComponent(
-              location.id
-            )}#kaart`}
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Open op kaart
           </a>
         </div>
       </section>
@@ -305,8 +320,8 @@ export default async function MachinePage({ params }: Props) {
           officiële bron van supermarkten of fabrikanten.
         </p>
         <p>
-          Meldingen worden anoniem opgeslagen; IP-adressen worden gehasht
-          om misbruik te kunnen detecteren.
+          Meldingen worden anoniem opgeslagen; IP-adressen worden gehasht om
+          misbruik te kunnen detecteren.
         </p>
       </section>
     </main>

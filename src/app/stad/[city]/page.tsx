@@ -7,7 +7,7 @@ import { Status } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { city: string };
+  params: { city?: string };
 };
 
 function statusLabel(s: Status | null) {
@@ -21,38 +21,76 @@ export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
   const rawCity = params?.city ?? "";
-  const cityName = rawCity || "Onbekend";
-  const prettyCity =
-    cityName.charAt(0).toUpperCase() + cityName.slice(1);
+  if (!rawCity) {
+    return {
+      title: "Statiegeldmachines per stad – statiestatus.nl",
+      description:
+        "Overzichtspagina voor statiegeldmachines per stad op statiestatus.nl.",
+    };
+  }
 
-  const title = `Statiegeldmachines in ${prettyCity} – statiestatus.nl`;
-  const description = `Bekijk de status van statiegeldmachines in ${prettyCity}: recente meldingen en community-data.`;
+  const prettyCity =
+    rawCity.charAt(0).toUpperCase() + rawCity.slice(1);
 
   return {
-    title,
-    description,
+    title: `Statiegeldmachines in ${prettyCity} – statiestatus.nl`,
+    description: `Bekijk de status van statiegeldmachines in ${prettyCity}: recente meldingen en community-data.`,
   };
 }
 
 export default async function CityPage({ params }: Props) {
   const rawCity = params?.city ?? "";
-  // We trust what Next gives us here – no extra decode.
+
+  // If no city param, don't query everything – just show a friendly message
+  if (!rawCity) {
+    return (
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-5">
+        <section className="space-y-2">
+          <p className="text-xs text-gray-500">
+            <a href="/" className="hover:underline">
+              statiestatus.nl
+            </a>{" "}
+            · Stad
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">
+            Geen stad opgegeven
+          </h1>
+          <p className="text-sm text-gray-600">
+            Deze pagina toont een overzicht van statiegeldmachines in een
+            specifieke stad. Gebruik de kaart of de zoekfunctie om een stad
+            te kiezen.
+          </p>
+        </section>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
+      </main>
+    );
+  }
+
   const cityName = rawCity;
   const prettyCity =
-    cityName
-      ? cityName.charAt(0).toUpperCase() + cityName.slice(1)
-      : "Onbekend";
+    cityName.charAt(0).toUpperCase() + cityName.slice(1);
 
-  // If cityName is empty, we just won't match anything
   const locations = await prisma.location.findMany({
-    where: cityName
-      ? {
-          city: {
-            equals: cityName,
-            mode: "insensitive",
-          },
-        }
-      : undefined,
+    where: {
+      city: {
+        equals: cityName,
+        mode: "insensitive",
+      },
+    },
     include: {
       reports: {
         orderBy: { createdAt: "desc" },
@@ -85,7 +123,7 @@ export default async function CityPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <p className="text-xs text-gray-500">
           <a href="/" className="hover:underline">
             statiestatus.nl
@@ -96,9 +134,24 @@ export default async function CityPage({ params }: Props) {
           Statiegeldmachines in {prettyCity}
         </h1>
         <p className="text-sm text-gray-600">
-          Overzicht van statiegeldmachines in {prettyCity}. Gegevens
-          zijn gebaseerd op community-meldingen en zijn indicatief.
+          Overzicht van statiegeldmachines in {prettyCity}. Gegevens zijn
+          gebaseerd op community-meldingen en zijn indicatief.
         </p>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
       </section>
 
       {!withStatus.length && (

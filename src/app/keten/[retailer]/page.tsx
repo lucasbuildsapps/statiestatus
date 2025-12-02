@@ -7,7 +7,7 @@ import { Status } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { retailer: string };
+  params: { retailer?: string };
 };
 
 function statusLabel(s: Status | null) {
@@ -21,29 +21,69 @@ export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
   const raw = params?.retailer ?? "";
-  const retailerName = raw || "Onbekende keten";
-  const title = `Statiegeldmachines bij ${retailerName} – statiestatus.nl`;
-  const description = `Overzicht van statiegeldmachines bij ${retailerName} op basis van community-meldingen.`;
+  if (!raw) {
+    return {
+      title: "Statiegeldmachines per winkelketen – statiestatus.nl",
+      description:
+        "Overzichtspagina voor statiegeldmachines per supermarktketen op statiestatus.nl.",
+    };
+  }
 
   return {
-    title,
-    description,
+    title: `Statiegeldmachines bij ${raw} – statiestatus.nl`,
+    description: `Overzicht van statiegeldmachines bij ${raw} op basis van community-meldingen.`,
   };
 }
 
 export default async function RetailerPage({ params }: Props) {
   const raw = params?.retailer ?? "";
-  const retailerName = raw || "Onbekende keten";
+
+  if (!raw) {
+    return (
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-5">
+        <section className="space-y-2">
+          <p className="text-xs text-gray-500">
+            <a href="/" className="hover:underline">
+              statiestatus.nl
+            </a>{" "}
+            · Winkelketen
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">
+            Geen winkelketen opgegeven
+          </h1>
+          <p className="text-sm text-gray-600">
+            Deze pagina toont een overzicht van statiegeldmachines bij één
+            keten. Gebruik de kaart of de zoekfunctie om een keten te kiezen.
+          </p>
+        </section>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  const retailerName = raw;
 
   const locations = await prisma.location.findMany({
-    where: raw
-      ? {
-          retailer: {
-            equals: raw,
-            mode: "insensitive",
-          },
-        }
-      : undefined,
+    where: {
+      retailer: {
+        equals: retailerName,
+        mode: "insensitive",
+      },
+    },
     include: {
       reports: {
         orderBy: { createdAt: "desc" },
@@ -74,7 +114,7 @@ export default async function RetailerPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <p className="text-xs text-gray-500">
           <a href="/" className="hover:underline">
             statiestatus.nl
@@ -85,9 +125,24 @@ export default async function RetailerPage({ params }: Props) {
           Statiegeldmachines bij {retailerName}
         </h1>
         <p className="text-sm text-gray-600">
-          Overzicht van statiegeldmachines bij {retailerName} in Nederland,
-          gebaseerd op community-meldingen.
+          Overzicht van statiegeldmachines bij {retailerName} in
+          Nederland, gebaseerd op community-meldingen.
         </p>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
       </section>
 
       {!withStatus.length && (
