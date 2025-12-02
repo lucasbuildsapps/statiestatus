@@ -13,11 +13,16 @@ declare global {
   }
 }
 
+function isMobile() {
+  if (typeof navigator === "undefined") return false;
+  return /iphone|ipad|ipod|android/i.test(navigator.userAgent || "");
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [showInstall, setShowInstall] = useState(false);
-  const [showIosHint, setShowIosHint] = useState(false);
+  const [showGenericHint, setShowGenericHint] = useState(false);
 
   useEffect(() => {
     // Skip if user already dismissed
@@ -30,17 +35,14 @@ export default function InstallPrompt() {
     }
     if (dismissed) return;
 
-    const isIos = /iphone|ipad|ipod/i.test(
-      window.navigator.userAgent || ""
-    );
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       // @ts-expect-error - iOS Safari specific
       window.navigator.standalone === true;
 
-    // Show passive hint on iOS if not installed
-    if (isIos && !isStandalone) {
-      setShowIosHint(true);
+    if (isStandalone) {
+      // Already "installed" – nothing to show
+      return;
     }
 
     const handler = (e: Event) => {
@@ -51,14 +53,23 @@ export default function InstallPrompt() {
     };
 
     window.addEventListener("beforeinstallprompt", handler);
+
+    // Fallback: on mobile, if we never get the event, still show a generic hint
+    const fallbackTimer = window.setTimeout(() => {
+      if (!deferredPrompt && isMobile()) {
+        setShowGenericHint(true);
+      }
+    }, 4000);
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
+      window.clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [deferredPrompt]);
 
   function dismiss() {
     setShowInstall(false);
-    setShowIosHint(false);
+    setShowGenericHint(false);
     try {
       window.localStorage.setItem(
         "statiestatus:installDismissed",
@@ -78,7 +89,7 @@ export default function InstallPrompt() {
     }
   }
 
-  if (!showInstall && !showIosHint) return null;
+  if (!showInstall && !showGenericHint) return null;
 
   return (
     <div className="fixed bottom-16 right-3 z-[960] max-w-xs">
@@ -89,18 +100,19 @@ export default function InstallPrompt() {
 
           {showInstall && (
             <p className="text-gray-600">
-              Open statiestatus.nl direct vanaf je beginscherm, zonder
-              browserbalk.
+              Installeer de webapp zodat je statiestatus.nl direct vanaf je
+              beginscherm kunt openen.
             </p>
           )}
 
-          {showIosHint && !showInstall && (
+          {showGenericHint && !showInstall && (
             <p className="text-gray-600">
-              Open het deel-menu en kies{" "}
+              Open het browsermenu en kies{" "}
               <span className="font-semibold">
-                &ldquo;Zet op beginscherm&rdquo;
+                &ldquo;App installeren&rdquo; of &ldquo;Zet op
+                beginscherm&rdquo;
               </span>{" "}
-              om statiestatus.nl als app te installeren.
+              om statiestatus.nl als app te gebruiken.
             </p>
           )}
 

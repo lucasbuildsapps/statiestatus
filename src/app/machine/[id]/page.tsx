@@ -11,66 +11,54 @@ type Props = {
   params: { id: string };
 };
 
-async function getLocation(id: string) {
-  const location = await prisma.location.findUnique({
-    where: { id },
-    include: {
-      reports: {
-        orderBy: { createdAt: "desc" },
-        take: 50,
+/**
+ * Very defensive loader: if anything goes wrong with Prisma,
+ * we log and return null instead of crashing the whole page.
+ */
+async function loadLocation(id: string) {
+  try {
+    if (!id || typeof id !== "string") return null;
+
+    const location = await prisma.location.findUnique({
+      where: { id },
+      include: {
+        reports: {
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
       },
-    },
-  });
+    });
 
-  if (!location) return null;
-  const currentStatus = deriveStatus(location.reports);
+    if (!location) return null;
 
-  return { location, currentStatus };
+    const currentStatus = deriveStatus(location.reports);
+
+    return { location, currentStatus };
+  } catch (err) {
+    console.error("Error loading machine detail page:", err);
+    return null;
+  }
 }
 
+/**
+ * Keep metadata simple & safe. We don’t hit Prisma here anymore.
+ */
 export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
-  const data = await getLocation(params.id);
-  if (!data) {
+  const baseTitle = "Statiegeldmachine – statiestatus.nl";
+  if (!params?.id) {
     return {
-      title: "Locatie niet gevonden – statiestatus.nl",
+      title: baseTitle,
+      description:
+        "Detailpagina van een statiegeldmachine op statiestatus.nl.",
     };
   }
 
-  const { location, currentStatus } = data;
-
-  const statusLabel =
-    currentStatus === "WORKING"
-      ? "Werkend"
-      : currentStatus === "ISSUES"
-      ? "Problemen"
-      : currentStatus === "OUT_OF_ORDER"
-      ? "Stuk"
-      : "Onbekend";
-
-  const title = `${location.name} – ${location.retailer} (${location.city}) – statiegeldmachine`;
-  const description = `Bekijk de actuele status (${statusLabel}) en recente meldingen van de statiegeldmachine bij ${location.retailer} in ${location.city}.`;
-
-  const url = `https://www.statiestatus.nl/machine/${location.id}`;
-
   return {
-    title,
-    description,
-    alternates: {
-      canonical: url,
-    },
-    openGraph: {
-      title,
-      description,
-      url,
-      type: "article",
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-    },
+    title: baseTitle,
+    description:
+      "Bekijk meldingen en status van deze statiegeldmachine op statiestatus.nl.",
   };
 }
 
@@ -106,13 +94,14 @@ function timeAgo(iso?: Date | string | null) {
 }
 
 export default async function MachinePage({ params }: Props) {
-  const data = await getLocation(params.id);
+  const data = await loadLocation(params.id);
 
   if (!data) {
+    // If the ID is invalid or Prisma fails, show a 404 instead of crashing.
     notFound();
   }
 
-  const { location, currentStatus } = data;
+  const { location, currentStatus } = data!;
   const { reports } = location;
 
   const lastReport = reports[0] ?? null;
