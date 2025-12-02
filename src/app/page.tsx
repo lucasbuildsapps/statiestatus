@@ -54,7 +54,7 @@ export default function Page() {
       <NavBar />
       <InstallPrompt />
 
-      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
         {/* HERO */}
         <section className="space-y-4 md:space-y-5">
           <div className="space-y-3 md:space-y-4 max-w-2xl">
@@ -150,6 +150,79 @@ export default function Page() {
             </div>
           </section>
         </section>
+
+
+        {/* CITY / RETAILER QUICK LINKS */}
+        <section className="rounded-2xl border bg-white shadow-sm p-5 space-y-3 text-sm">
+          <h2 className="text-base font-semibold">
+            Snel zoeken per stad of winkelketen
+          </h2>
+          <p className="text-gray-700 text-sm">
+            Liever een overzicht? Gebruik de kaarten per stad of per keten om
+            snel te zien welke machines er zijn en wat hun status is.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-2">
+              <div className="font-medium text-gray-700">
+                Populaire steden
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/stad/Amsterdam"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Amsterdam
+                </Link>
+                <Link
+                  href="/stad/Rotterdam"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Rotterdam
+                </Link>
+                <Link
+                  href="/stad/Utrecht"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Utrecht
+                </Link>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="font-medium text-gray-700">
+                Populaire winkelketens
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/keten/Albert%20Heijn"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Albert Heijn
+                </Link>
+                <Link
+                  href="/keten/Jumbo"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Jumbo
+                </Link>
+                <Link
+                  href="/keten/Lidl"
+                  className="px-3 py-1.5 rounded-full border bg-gray-50 hover:bg-gray-100"
+                >
+                  Lidl
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Deze pagina&apos;s zijn extra ingangen voor zoekmachines én voor
+            bezoekers die snel willen filteren op locatie of keten.
+          </p>
+        </section>
+
+
 
         {/* HOW IT WORKS */}
         <section

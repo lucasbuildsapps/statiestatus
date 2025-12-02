@@ -1,5 +1,4 @@
 // src/app/machine/[id]/page.tsx
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { deriveStatus } from "@/lib/derive";
@@ -8,14 +7,10 @@ import { Status } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { id: string };
+  params: { id?: string };
 };
 
-/**
- * Very defensive loader: if anything goes wrong with Prisma,
- * we log and return null instead of crashing the whole page.
- */
-async function loadLocation(id: string) {
+async function loadLocation(id: string | undefined) {
   try {
     if (!id || typeof id !== "string") return null;
 
@@ -40,20 +35,10 @@ async function loadLocation(id: string) {
   }
 }
 
-/**
- * Keep metadata simple & safe. We don’t hit Prisma here anymore.
- */
 export async function generateMetadata(
-  { params }: Props
+  _props: Props
 ): Promise<Metadata> {
   const baseTitle = "Statiegeldmachine – statiestatus.nl";
-  if (!params?.id) {
-    return {
-      title: baseTitle,
-      description:
-        "Detailpagina van een statiegeldmachine op statiestatus.nl.",
-    };
-  }
 
   return {
     title: baseTitle,
@@ -94,14 +79,53 @@ function timeAgo(iso?: Date | string | null) {
 }
 
 export default async function MachinePage({ params }: Props) {
-  const data = await loadLocation(params.id);
+  const id = params?.id;
+  const data = await loadLocation(id);
 
   if (!data) {
-    // If the ID is invalid or Prisma fails, show a 404 instead of crashing.
-    notFound();
+    return (
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4">
+        <p className="text-xs text-gray-500">
+          <a href="/" className="hover:underline">
+            statiestatus.nl
+          </a>{" "}
+          · Locatie detail
+        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Locatie niet gevonden
+        </h1>
+        <p className="text-sm text-gray-600">
+          We konden deze statiegeldmachine niet vinden. Mogelijk is de link
+          verouderd of is de locatie verwijderd.
+        </p>
+        {id && (
+          <p className="text-[11px] text-gray-400">
+            Gevraagde locatie-ID:{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100">
+              {id}
+            </code>
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2 text-xs pt-2">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
+      </main>
+    );
   }
 
-  const { location, currentStatus } = data!;
+  const { location, currentStatus } = data;
   const { reports } = location;
 
   const lastReport = reports[0] ?? null;
@@ -152,7 +176,6 @@ export default async function MachinePage({ params }: Props) {
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
-      {/* JSON-LD for SEO */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -192,6 +215,27 @@ export default async function MachinePage({ params }: Props) {
               Laatste melding: {timeAgo(lastReport.createdAt)}
             </span>
           )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-xs pt-2">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href={`/stad/${encodeURIComponent(location.city)}`}
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Alle machines in {location.city}
+          </a>
+          <a
+            href={`/keten/${encodeURIComponent(location.retailer)}`}
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Alle machines bij {location.retailer}
+          </a>
         </div>
       </section>
 
@@ -268,26 +312,6 @@ export default async function MachinePage({ params }: Props) {
           De status van deze statiegeldmachine is gebaseerd op meldingen van
           bezoekers. Check altijd zelf ter plekke of de machine werkt.
         </p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <a
-            href={`/?location=${encodeURIComponent(
-              location.id
-            )}#kaart`}
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100 text-xs"
-          >
-            Open op kaart
-          </a>
-          <a
-            href={`https://maps.google.com/?q=${encodeURIComponent(
-              `${location.name}, ${location.address}, ${location.city}`
-            )}`}
-            target="_blank"
-            rel="noreferrer"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100 text-xs"
-          >
-            Open in Google Maps
-          </a>
-        </div>
       </section>
 
       <section className="text-xs text-gray-500 space-y-1">
@@ -296,8 +320,8 @@ export default async function MachinePage({ params }: Props) {
           officiële bron van supermarkten of fabrikanten.
         </p>
         <p>
-          Meldingen worden anoniem opgeslagen; IP-adressen worden gehasht
-          om misbruik te kunnen detecteren.
+          Meldingen worden anoniem opgeslagen; IP-adressen worden gehasht om
+          misbruik te kunnen detecteren.
         </p>
       </section>
     </main>

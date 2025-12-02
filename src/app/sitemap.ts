@@ -1,20 +1,29 @@
 // src/app/sitemap.ts
 import type { MetadataRoute } from "next";
+import { prisma } from "@/lib/prisma";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://www.statiestatus.nl";
+const BASE_URL = "https://www.statiestatus.nl";
 
-  return [
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const locations = await prisma.location.findMany({
+    select: { id: true },
+  });
+
+  const staticPages: MetadataRoute.Sitemap = [
     {
-      url: `${baseUrl}/`,
+      url: `${BASE_URL}/`,
       lastModified: new Date(),
-      changeFrequency: "hourly",
-      priority: 1,
     },
     {
-      url: `${baseUrl}/stats`,
-      changeFrequency: "daily",
-      priority: 0.6,
+      url: `${BASE_URL}/stats`,
+      lastModified: new Date(),
     },
   ];
+
+  const machinePages: MetadataRoute.Sitemap = locations.map((l) => ({
+    url: `${BASE_URL}/machine/${l.id}`,
+    lastModified: new Date(),
+  }));
+
+  return [...staticPages, ...machinePages];
 }
