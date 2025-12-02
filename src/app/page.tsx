@@ -179,7 +179,7 @@ export default function Page() {
                 3. Meld jouw ervaring
               </div>
               <p>
-                Plaats zelf eenmelding na je bezoek. Zo help je anderen én
+                Plaats zelf een melding na je bezoek. Zo help je anderen én
                 wordt de data betrouwbaarder.
               </p>
             </div>
@@ -240,7 +240,7 @@ export default function Page() {
               <dd className="text-gray-600">
                 Zodra iemand een melding plaatst wordt de kaart direct
                 bijgewerkt. De tekst &ldquo;Laatste update&rdquo; boven de kaart
-                is gebaseerd op de meest recente melding in heel Nederland.
+                is gebaseerd op recente meldingen in de database.
               </dd>
             </div>
             <div>

@@ -7,6 +7,7 @@ import {
   fetchLocationsShared,
   type ApiLocation,
   type ApiStatus,
+  type Bounds,
 } from "@/lib/locationsClient";
 
 type LocationItem = ApiLocation;
@@ -55,6 +56,27 @@ function distanceKm(
   return R * c;
 }
 
+// Simple helper: bounds around a center point with given radius (km)
+function boundsAround(
+  lat: number,
+  lng: number,
+  radiusKm: number
+): Bounds {
+  const earthRadiusKm = 6371;
+  const dLat = (radiusKm / earthRadiusKm) * (180 / Math.PI);
+  const dLng =
+    (radiusKm /
+      (earthRadiusKm * Math.cos((lat * Math.PI) / 180))) *
+    (180 / Math.PI);
+
+  return {
+    north: lat + dLat,
+    south: lat - dLat,
+    east: lng + dLng,
+    west: lng - dLng,
+  };
+}
+
 export default function NearbyList() {
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,33 +110,7 @@ export default function NearbyList() {
     }
   }, []);
 
-  // 2) Fetch locations using shared cache
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await fetchLocationsShared(false);
-        if (!cancelled) {
-          setLocations(data);
-          setError(null);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setError("Kon locaties niet laden.");
-          setLocations([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // 3) Geolocation
+  // 2) Geolocation
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setGeoError(true);
@@ -143,6 +139,43 @@ export default function NearbyList() {
       { enableHighAccuracy: true, timeout: 15000 }
     );
   }, []);
+
+  // 3) Fetch locations, preferring a bounding box around the user
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        let data: LocationItem[];
+        if (pos) {
+          const bounds = boundsAround(pos.lat, pos.lng, 20); // ~20km radius
+          data = await fetchLocationsShared({ bounds });
+        } else {
+          // fallback: limited set of latest locations across NL
+          data = await fetchLocationsShared(false);
+        }
+
+        if (!cancelled) {
+          setLocations(data);
+          setError(null);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setError("Kon locaties niet laden.");
+          setLocations([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pos]);
 
   // Enrich with distance
   const enriched: LocationWithDistance[] = useMemo(

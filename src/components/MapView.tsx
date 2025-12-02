@@ -2,11 +2,11 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useCallback,
   type FormEvent,
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
@@ -15,6 +15,7 @@ import {
   fetchLocationsShared,
   type ApiLocation,
   type ApiStatus,
+  type Bounds,
 } from "@/lib/locationsClient";
 
 type LeafletAPI = {
@@ -28,10 +29,10 @@ type LeafletAPI = {
 type LocationItem = ApiLocation;
 
 function colorForStatus(s: ApiStatus | null) {
-  if (s === "WORKING") return "#22c55e"; // green-500
-  if (s === "ISSUES") return "#eab308"; // yellow-500
-  if (s === "OUT_OF_ORDER") return "#ef4444"; // red-500
-  return "#9ca3af"; // gray-400
+  if (s === "WORKING") return "#22c55e";
+  if (s === "ISSUES") return "#eab308";
+  if (s === "OUT_OF_ORDER") return "#ef4444";
+  return "#9ca3af";
 }
 
 function statusLabel(s: ApiStatus) {
@@ -81,48 +82,14 @@ export default function MapView() {
 
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // Track current zoom level for performance-related logic
+  // Track current zoom & center for bounds-based fetching
   const [mapZoom, setMapZoom] = useState<number>(12);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
 
   const { isFavorite, toggleFavorite } = useFavorites();
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
-
-  // Shared loader using the client cache
-  const loadLocations = useCallback(
-    async (force = false) => {
-      try {
-        const list = await fetchLocationsShared(force);
-        setLocations(list);
-      } catch (e) {
-        console.error("MapView: failed to load locations", e);
-        setLocations([]);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    loadLocations(false);
-  }, [loadLocations]);
-
-  // Compute latest update time
-  useEffect(() => {
-    if (!locations.length) {
-      setLastUpdatedAt(null);
-      return;
-    }
-    const times = locations
-      .map((l) => l.lastReportAt)
-      .filter(Boolean) as string[];
-    if (!times.length) {
-      setLastUpdatedAt(null);
-      return;
-    }
-    const latest = times.reduce((acc, cur) =>
-      new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
-    );
-    setLastUpdatedAt(latest);
-  }, [locations]);
 
   // dynamic import of react-leaflet
   useEffect(() => {
@@ -191,6 +158,7 @@ export default function MapView() {
 
   const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
+  // Filter by status
   const visibleLocations = useMemo(() => {
     let list = locations;
     if (statusFilter !== "ALL") {
@@ -199,6 +167,7 @@ export default function MapView() {
     return list;
   }, [locations, statusFilter]);
 
+  // Filter by search query
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return visibleLocations;
@@ -214,6 +183,25 @@ export default function MapView() {
     if (!mapZoom || mapZoom < 9) return [];
     return visibleLocations;
   }, [mapZoom, visibleLocations]);
+
+  // Compute latest update time based on currently loaded locations
+  useEffect(() => {
+    if (!locations.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const times = locations
+      .map((l) => l.lastReportAt)
+      .filter(Boolean) as string[];
+    if (!times.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const latest = times.reduce((acc, cur) =>
+      new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
+    );
+    setLastUpdatedAt(latest);
+  }, [locations]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -276,6 +264,66 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
+  // Helper to compute bounds object from the current Leaflet map
+  const getCurrentBounds = useCallback((): Bounds | null => {
+    if (!map) return null;
+    const b = map.getBounds();
+    return {
+      north: b.getNorth(),
+      south: b.getSouth(),
+      east: b.getEast(),
+      west: b.getWest(),
+    };
+  }, [map]);
+
+  // Fetch locations whenever map moves/zooms (and zoom is high enough)
+  useEffect(() => {
+    if (!map || !mapCenter) return;
+
+    if (mapZoom < 9) {
+      setLocations([]);
+      return;
+    }
+
+    const bounds = getCurrentBounds();
+    if (!bounds) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await fetchLocationsShared({ bounds });
+        if (!cancelled) {
+          setLocations(list);
+        }
+      } catch (e) {
+        console.error("MapView: failed to load bounded locations", e);
+        if (!cancelled) setLocations([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [map, mapCenter, mapZoom, getCurrentBounds]);
+
+  // Called after a new report is submitted in the popup
+  const reloadLocationsForCurrentView = useCallback(async () => {
+    if (!map) return;
+    const bounds = getCurrentBounds();
+    if (!bounds) return;
+
+    try {
+      const list = await fetchLocationsShared({
+        bounds,
+        forceRefresh: true,
+      });
+      setLocations(list);
+    } catch (e) {
+      console.error("MapView: failed to reload locations", e);
+    }
+  }, [map, getCurrentBounds]);
+
   if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[60vh] md:h-[70vh] grid place-items-center">
@@ -292,15 +340,30 @@ export default function MapView() {
     useEffect(() => {
       setMap(m);
 
-      const handleZoom = () => {
-        setMapZoom(m.getZoom());
+      const syncCenter = () => {
+        const c = m.getCenter();
+        setMapCenter({ lat: c.lat, lng: c.lng });
       };
 
-      m.on("zoomend", handleZoom);
+      const handleZoom = () => {
+        setMapZoom(m.getZoom());
+        syncCenter();
+      };
+
+      const handleMoveEnd = () => {
+        syncCenter();
+      };
+
+      // initial values
       setMapZoom(m.getZoom());
+      syncCenter();
+
+      m.on("zoomend", handleZoom);
+      m.on("moveend", handleMoveEnd);
 
       return () => {
         m.off("zoomend", handleZoom);
+        m.off("moveend", handleMoveEnd);
       };
     }, [m]);
 
@@ -449,7 +512,7 @@ export default function MapView() {
           center={defaultCenter}
           zoom={12}
           scrollWheelZoom
-          preferCanvas={true} // better performance with many markers
+          preferCanvas={true}
           className="w-full h-full"
         >
           <MapController />
@@ -557,7 +620,7 @@ export default function MapView() {
                                 <StatusDot status={r.status} />
                               </span>
                               <span className="text-gray-700">
-                                <b>{statusLabel(r.status)}</b>
+                                <b>{statusLabel(r.status as ApiStatus)}</b>
                                 {r.note ? ` — ${r.note}` : ""}
                                 <span className="text-gray-500">
                                   {" "}
@@ -574,7 +637,7 @@ export default function MapView() {
                     <ReportForm
                       locationId={l.id}
                       onSuccess={async () => {
-                        await loadLocations(true);
+                        await reloadLocationsForCurrentView();
                         showToast("✅ Bedankt! Melding geplaatst.");
                       }}
                     />
