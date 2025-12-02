@@ -88,6 +88,9 @@ export default function MapView() {
 
   const [controlsOpen, setControlsOpen] = useState(true);
 
+  // NEW: track current map zoom (for performance)
+  const [mapZoom, setMapZoom] = useState<number>(12);
+
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
@@ -214,6 +217,13 @@ export default function MapView() {
     );
   }, [visibleLocations, q]);
 
+  // NEW: only render markers when sufficiently zoomed in
+  const markersToRender = useMemo(() => {
+    // tweak this threshold if you like
+    if (!mapZoom || mapZoom < 9) return [];
+    return visibleLocations;
+  }, [mapZoom, visibleLocations]);
+
   function showToast(msg: string) {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2600);
@@ -287,8 +297,21 @@ export default function MapView() {
 
   function MapController() {
     const m = useMap();
+
     useEffect(() => {
       setMap(m);
+
+      const handleZoom = () => {
+        setMapZoom(m.getZoom());
+      };
+
+      m.on("zoomend", handleZoom);
+      // initialize
+      setMapZoom(m.getZoom());
+
+      return () => {
+        m.off("zoomend", handleZoom);
+      };
     }, [m]);
 
     useEffect(() => {
@@ -423,12 +446,20 @@ export default function MapView() {
         </div>
       </div>
 
-      {/* Map itself */}
-      <div className="w-full h-[60vh] md:h-[70vh]">
+      {/* Map + overlay */}
+      <div className="relative w-full h-[60vh] md:h-[70vh]">
+        {/* Hint when zoomed out and markers are hidden */}
+        {mapZoom < 9 && (
+          <div className="absolute z-[850] top-4 left-1/2 -translate-x-1/2 rounded-full bg-white/90 border border-gray-200 px-3 py-1 text-[11px] shadow">
+            🔍 Zoom in om statiegeldmachines te zien
+          </div>
+        )}
+
         <MapContainer
           center={defaultCenter}
           zoom={12}
           scrollWheelZoom
+          preferCanvas={true} // important: better performance with many markers
           className="w-full h-full"
         >
           <MapController />
@@ -452,7 +483,8 @@ export default function MapView() {
             />
           )}
 
-          {visibleLocations.map((l) => {
+          {/* Locations (only rendered when zoomed in enough) */}
+          {markersToRender.map((l) => {
             const fillColor = colorForStatus(l.currentStatus);
 
             return (
