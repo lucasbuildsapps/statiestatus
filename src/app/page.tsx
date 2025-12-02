@@ -6,6 +6,7 @@ import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import ContactForm from "../components/ContactForm";
 import PrivacyNote from "../components/PrivacyNote";
+import InstallPrompt from "../components/InstallPrompt";
 
 export const metadata: Metadata = {
   title: "statiestatus.nl – Check de status van statiegeldmachines in Nederland",
@@ -51,6 +52,7 @@ export default function Page() {
       />
 
       <NavBar />
+      <InstallPrompt />
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
         {/* HERO */}
@@ -179,7 +181,7 @@ export default function Page() {
                 3. Meld jouw ervaring
               </div>
               <p>
-                Plaats zelf eenmelding na je bezoek. Zo help je anderen én
+                Plaats zelf een melding na je bezoek. Zo help je anderen én
                 wordt de data betrouwbaarder.
               </p>
             </div>
@@ -240,7 +242,7 @@ export default function Page() {
               <dd className="text-gray-600">
                 Zodra iemand een melding plaatst wordt de kaart direct
                 bijgewerkt. De tekst &ldquo;Laatste update&rdquo; boven de kaart
-                is gebaseerd op de meest recente melding in heel Nederland.
+                is gebaseerd op recente meldingen in de database.
               </dd>
             </div>
             <div>

@@ -212,7 +212,7 @@ export default function NearbyList() {
 
   return (
     <section className="space-y-4 text-sm">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-baseline justify_between gap-2">
         <h2 className="text-base font-semibold">In de buurt</h2>
         {loading && (
           <span className="text-xs text-gray-400">Laden…</span>
@@ -314,12 +314,18 @@ export default function NearbyList() {
                     </button>
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <a
+                      href={`/machine/${l.id}`}
+                      className="text-[11px] text-gray-600 hover:underline"
+                    >
+                      Details
+                    </a>
                     <a
                       href="#kaart"
                       className="text-[11px] text-gray-500 hover:underline"
                     >
-                      Details op kaart bekijken
+                      Op kaart bekijken
                     </a>
                   </div>
                 </li>
@@ -393,6 +399,21 @@ export default function NearbyList() {
                   {l.distanceKm != null && (
                     <span>{formatDistance(l.distanceKm)}</span>
                   )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <a
+                    href={`/machine/${l.id}`}
+                    className="text-[11px] text-gray-600 hover:underline"
+                  >
+                    Details
+                  </a>
+                  <a
+                    href="#kaart"
+                    className="text-[11px] text-gray-500 hover:underline"
+                  >
+                    Op kaart bekijken
+                  </a>
                 </div>
               </li>
             ))}
