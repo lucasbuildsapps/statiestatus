@@ -1,19 +1,58 @@
 // src/app/page.tsx
-"use client";
-
 import Link from "next/link";
+import type { Metadata } from "next";
 import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import ContactForm from "../components/ContactForm";
 import PrivacyNote from "../components/PrivacyNote";
 
+export const metadata: Metadata = {
+  title: "statiestatus.nl – Check de status van statiegeldmachines in Nederland",
+  description:
+    "Controleer of een statiegeldmachine werkt en meld jouw ervaring. Geen account nodig, geen reclame, volledig community-gedreven.",
+  metadataBase: new URL("https://www.statiestatus.nl"),
+  alternates: {
+    canonical: "https://www.statiestatus.nl/",
+  },
+  openGraph: {
+    title: "statiestatus.nl – Status van statiegeldmachines",
+    description:
+      "Bekijk of statiegeldmachines werken en help anderen door de status te rapporteren.",
+    url: "https://www.statiestatus.nl/",
+    siteName: "statiestatus.nl",
+    type: "website",
+    locale: "nl_NL",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "statiestatus.nl – Status van statiegeldmachines",
+    description:
+      "Controleer of statiegeldmachines werken, bekijk meldingen en voeg zelf meldingen toe.",
+  },
+};
+
 export default function Page() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "statiestatus.nl",
+    url: "https://www.statiestatus.nl/",
+    description:
+      "Community-project waarmee je kunt zien of statiegeldmachines in Nederland werken.",
+  };
+
   return (
     <>
+      {/* SEO structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       <NavBar />
 
-      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 space-y-6 sm:space-y-8">
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-8 sm:space-y-10">
         {/* HERO */}
         <section className="space-y-4 md:space-y-5">
           <div className="space-y-3 md:space-y-4 max-w-2xl">
@@ -22,18 +61,18 @@ export default function Page() {
               Live community project in Nederland
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
               statiestatus.nl
             </h1>
 
-            <p className="text-gray-700 text-sm sm:text-base">
+            <p className="text-gray-700 text-sm sm:text-base md:text-lg">
               Controleer of een statiegeldmachine werkt en help anderen door de
               status te rapporteren. Geen account nodig, geen reclame, volledig
               community-gedreven.
             </p>
           </div>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs sm:text-sm text-gray-500">
             Laatste update: real-time uit community-meldingen • gegevens zijn
             indicatief en niet officieel.
           </p>
@@ -73,6 +112,9 @@ export default function Page() {
             id="nearby"
             className="rounded-2xl border bg-white shadow-sm p-4"
           >
+            <h2 className="text-base font-semibold mb-2">
+              Statiegeldmachines bij jou in de buurt
+            </h2>
             <NearbyList />
           </section>
 
@@ -137,7 +179,7 @@ export default function Page() {
                 3. Meld jouw ervaring
               </div>
               <p>
-                Plaats zelf een melding na je bezoek. Zo help je anderen én
+                Plaats zelf eenmelding na je bezoek. Zo help je anderen én
                 wordt de data betrouwbaarder.
               </p>
             </div>
