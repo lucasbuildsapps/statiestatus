@@ -82,8 +82,7 @@ export default function MapView() {
 
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // Track current zoom & center for bounds-based fetching
-  const [mapZoom, setMapZoom] = useState<number>(12);
+  // Track current map center so we know when to refetch
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(
     null
   );
@@ -178,11 +177,8 @@ export default function MapView() {
     );
   }, [visibleLocations, q]);
 
-  // Only render markers when sufficiently zoomed in
-  const markersToRender = useMemo(() => {
-    if (!mapZoom || mapZoom < 9) return [];
-    return visibleLocations;
-  }, [mapZoom, visibleLocations]);
+  // Markers to render (no zoom gating anymore)
+  const markersToRender = useMemo(() => visibleLocations, [visibleLocations]);
 
   // Compute latest update time based on currently loaded locations
   useEffect(() => {
@@ -276,14 +272,9 @@ export default function MapView() {
     };
   }, [map]);
 
-  // Fetch locations whenever map moves/zooms (and zoom is high enough)
+  // Fetch locations whenever map moves/zooms (based on current viewport)
   useEffect(() => {
     if (!map || !mapCenter) return;
-
-    if (mapZoom < 9) {
-      setLocations([]);
-      return;
-    }
 
     const bounds = getCurrentBounds();
     if (!bounds) return;
@@ -305,7 +296,7 @@ export default function MapView() {
     return () => {
       cancelled = true;
     };
-  }, [map, mapCenter, mapZoom, getCurrentBounds]);
+  }, [map, mapCenter, getCurrentBounds]);
 
   // Called after a new report is submitted in the popup
   const reloadLocationsForCurrentView = useCallback(async () => {
@@ -345,25 +336,15 @@ export default function MapView() {
         setMapCenter({ lat: c.lat, lng: c.lng });
       };
 
-      const handleZoom = () => {
-        setMapZoom(m.getZoom());
-        syncCenter();
-      };
-
-      const handleMoveEnd = () => {
-        syncCenter();
-      };
-
       // initial values
-      setMapZoom(m.getZoom());
       syncCenter();
 
-      m.on("zoomend", handleZoom);
-      m.on("moveend", handleMoveEnd);
+      m.on("zoomend", syncCenter);
+      m.on("moveend", syncCenter);
 
       return () => {
-        m.off("zoomend", handleZoom);
-        m.off("moveend", handleMoveEnd);
+        m.off("zoomend", syncCenter);
+        m.off("moveend", syncCenter);
       };
     }, [m]);
 
@@ -499,15 +480,8 @@ export default function MapView() {
         </div>
       </div>
 
-      {/* Map + overlay */}
+      {/* Map */}
       <div className="relative w-full h-[60vh] md:h-[70vh]">
-        {/* Hint when zoomed out and markers are hidden */}
-        {mapZoom < 9 && (
-          <div className="absolute z-[850] top-4 left-1/2 -translate-x-1/2 rounded-full bg-white/90 border border-gray-200 px-3 py-1 text-[11px] shadow">
-            🔍 Zoom in om statiegeldmachines te zien
-          </div>
-        )}
-
         <MapContainer
           center={defaultCenter}
           zoom={12}
@@ -536,7 +510,7 @@ export default function MapView() {
             />
           )}
 
-          {/* Locations (only rendered when zoomed in enough) */}
+          {/* Locations (always rendered for current viewport) */}
           {markersToRender.map((l) => {
             const fillColor = colorForStatus(l.currentStatus);
 
