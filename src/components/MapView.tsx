@@ -79,17 +79,17 @@ export default function MapView() {
   const [centeredOnUser, setCenteredOnUser] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [userInteracted, setUserInteracted] = useState(false);
-
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // NEW: track current map zoom (for performance)
-  const [mapZoom, setMapZoom] = useState<number>(12);
+  // NEW: id that comes from ?location= in the URL
+  const [initialLocationId, setInitialLocationId] = useState<string | null>(
+    null
+  );
 
   const { isFavorite, toggleFavorite } = useFavorites();
-
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
-  // Shared loader using the client cache (global fetch)
+  // Shared loader using the client cache
   const loadLocations = useCallback(
     async (force = false) => {
       try {
@@ -191,6 +191,19 @@ export default function MapView() {
     );
   }, []);
 
+  // NEW: read ?location= from the URL once on mount
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const loc = url.searchParams.get("location");
+      if (loc) {
+        setInitialLocationId(loc);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
   const visibleLocations = useMemo(() => {
@@ -210,13 +223,6 @@ export default function MapView() {
       )
     );
   }, [visibleLocations, q]);
-
-  // Only render markers when sufficiently zoomed in
-  const markersToRender = useMemo(() => {
-    // tweak this threshold if you like
-    if (!mapZoom || mapZoom < 9) return [];
-    return visibleLocations;
-  }, [mapZoom, visibleLocations]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -279,6 +285,25 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
+  // NEW: once map + locations are ready and we have initialLocationId, zoom to it
+  useEffect(() => {
+    if (!initialLocationId || !map || !locations.length) return;
+
+    const target = locations.find((l) => l.id === initialLocationId);
+    if (!target) return;
+
+    setUserInteracted(true);
+    map.setView([target.lat, target.lng], 16);
+    setHighlightId(target.id);
+
+    const marker = markerRefs.current[target.id];
+    if (marker) {
+      setTimeout(() => {
+        marker.openPopup();
+      }, 200);
+    }
+  }, [initialLocationId, map, locations]);
+
   if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[60vh] md:h-[70vh] grid place-items-center">
@@ -291,21 +316,8 @@ export default function MapView() {
 
   function MapController() {
     const m = useMap();
-
     useEffect(() => {
       setMap(m);
-
-      const handleZoom = () => {
-        setMapZoom(m.getZoom());
-      };
-
-      m.on("zoomend", handleZoom);
-      // initialize
-      setMapZoom(m.getZoom());
-
-      return () => {
-        m.off("zoomend", handleZoom);
-      };
     }, [m]);
 
     useEffect(() => {
@@ -440,20 +452,12 @@ export default function MapView() {
         </div>
       </div>
 
-      {/* Map + overlay */}
-      <div className="relative w-full h-[60vh] md:h-[70vh]">
-        {/* Hint when zoomed out and markers are hidden */}
-        {mapZoom < 9 && (
-          <div className="absolute z-[850] top-4 left-1/2 -translate-x-1/2 rounded-full bg-white/90 border border-gray-200 px-3 py-1 text-[11px] shadow">
-            🔍 Zoom in om statiegeldmachines te zien
-          </div>
-        )}
-
+      {/* Map itself */}
+      <div className="w-full h-[60vh] md:h-[70vh]">
         <MapContainer
           center={defaultCenter}
           zoom={12}
           scrollWheelZoom
-          preferCanvas={true}
           className="w-full h-full"
         >
           <MapController />
@@ -477,8 +481,7 @@ export default function MapView() {
             />
           )}
 
-          {/* Locations (only rendered when zoomed in enough) */}
-          {markersToRender.map((l) => {
+          {visibleLocations.map((l) => {
             const fillColor = colorForStatus(l.currentStatus);
 
             return (
@@ -527,12 +530,6 @@ export default function MapView() {
                         >
                           Deel link
                         </button>
-                        <Link
-                          href={`/machine/${l.id}`}
-                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50 text-center"
-                        >
-                          Details
-                        </Link>
                       </div>
                     </div>
 
@@ -551,6 +548,28 @@ export default function MapView() {
                           "Nog geen meldingen"
                         )}
                       </div>
+                    </div>
+
+                    {/* Links to detail / city / retailer pages */}
+                    <div className="flex flex-wrap gap-2 text-[11px] pt-1">
+                      <Link
+                        href={`/machine/${l.id}`}
+                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                      >
+                        Details pagina
+                      </Link>
+                      <Link
+                        href={`/stad/${encodeURIComponent(l.city)}`}
+                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                      >
+                        Meer in {l.city}
+                      </Link>
+                      <Link
+                        href={`/keten/${encodeURIComponent(l.retailer)}`}
+                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                      >
+                        Alle bij {l.retailer}
+                      </Link>
                     </div>
 
                     {/* Recent reports */}
