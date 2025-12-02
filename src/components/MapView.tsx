@@ -10,6 +10,7 @@ import {
   type FormEvent,
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
+import Link from "next/link";
 import useFavorites from "@/lib/useFavorites";
 import {
   fetchLocationsShared,
@@ -81,13 +82,14 @@ export default function MapView() {
 
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // Track current zoom level for performance-related logic
+  // NEW: track current map zoom (for performance)
   const [mapZoom, setMapZoom] = useState<number>(12);
 
   const { isFavorite, toggleFavorite } = useFavorites();
+
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
-  // Shared loader using the client cache
+  // Shared loader using the client cache (global fetch)
   const loadLocations = useCallback(
     async (force = false) => {
       try {
@@ -211,6 +213,7 @@ export default function MapView() {
 
   // Only render markers when sufficiently zoomed in
   const markersToRender = useMemo(() => {
+    // tweak this threshold if you like
     if (!mapZoom || mapZoom < 9) return [];
     return visibleLocations;
   }, [mapZoom, visibleLocations]);
@@ -257,7 +260,7 @@ export default function MapView() {
   }
 
   function shareLocation(l: LocationItem) {
-    const url = `${window.location.origin}/?location=${encodeURIComponent(
+    const url = `${window.location.origin}/machine/${encodeURIComponent(
       l.id
     )}`;
     if (navigator.share) {
@@ -297,6 +300,7 @@ export default function MapView() {
       };
 
       m.on("zoomend", handleZoom);
+      // initialize
       setMapZoom(m.getZoom());
 
       return () => {
@@ -449,7 +453,7 @@ export default function MapView() {
           center={defaultCenter}
           zoom={12}
           scrollWheelZoom
-          preferCanvas={true} // better performance with many markers
+          preferCanvas={true}
           className="w-full h-full"
         >
           <MapController />
@@ -523,6 +527,12 @@ export default function MapView() {
                         >
                           Deel link
                         </button>
+                        <Link
+                          href={`/machine/${l.id}`}
+                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50 text-center"
+                        >
+                          Details
+                        </Link>
                       </div>
                     </div>
 
@@ -601,7 +611,11 @@ export default function MapView() {
 
 /* ---------- UI helpers ---------- */
 
-function StatusBadge({ status }: { status: ApiStatus | null }) {
+function StatusBadge({
+  status,
+}: {
+  status: ApiStatus | null;
+}) {
   const label = status ? statusLabel(status as ApiStatus) : "Onbekend";
   const color =
     status === "WORKING"
@@ -618,7 +632,11 @@ function StatusBadge({ status }: { status: ApiStatus | null }) {
   );
 }
 
-function StatusDot({ status }: { status: ApiStatus }) {
+function StatusDot({
+  status,
+}: {
+  status: ApiStatus;
+}) {
   const color = colorForStatus(status);
   return (
     <span
