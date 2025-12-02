@@ -2,11 +2,11 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useCallback,
   type FormEvent,
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
@@ -15,7 +15,6 @@ import {
   fetchLocationsShared,
   type ApiLocation,
   type ApiStatus,
-  type Bounds,
 } from "@/lib/locationsClient";
 
 type LeafletAPI = {
@@ -29,10 +28,10 @@ type LeafletAPI = {
 type LocationItem = ApiLocation;
 
 function colorForStatus(s: ApiStatus | null) {
-  if (s === "WORKING") return "#22c55e";
-  if (s === "ISSUES") return "#eab308";
-  if (s === "OUT_OF_ORDER") return "#ef4444";
-  return "#9ca3af";
+  if (s === "WORKING") return "#22c55e"; // green-500
+  if (s === "ISSUES") return "#eab308"; // yellow-500
+  if (s === "OUT_OF_ORDER") return "#ef4444"; // red-500
+  return "#9ca3af"; // gray-400
 }
 
 function statusLabel(s: ApiStatus) {
@@ -82,13 +81,49 @@ export default function MapView() {
 
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // Track current map center so we know when to refetch
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(
-    null
-  );
+  // NEW: track current map zoom (for performance)
+  const [mapZoom, setMapZoom] = useState<number>(12);
 
   const { isFavorite, toggleFavorite } = useFavorites();
+
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
+
+  // Shared loader using the client cache (global fetch)
+  const loadLocations = useCallback(
+    async (force = false) => {
+      try {
+        const list = await fetchLocationsShared(force);
+        setLocations(list);
+      } catch (e) {
+        console.error("MapView: failed to load locations", e);
+        setLocations([]);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    loadLocations(false);
+  }, [loadLocations]);
+
+  // Compute latest update time
+  useEffect(() => {
+    if (!locations.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const times = locations
+      .map((l) => l.lastReportAt)
+      .filter(Boolean) as string[];
+    if (!times.length) {
+      setLastUpdatedAt(null);
+      return;
+    }
+    const latest = times.reduce((acc, cur) =>
+      new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
+    );
+    setLastUpdatedAt(latest);
+  }, [locations]);
 
   // dynamic import of react-leaflet
   useEffect(() => {
@@ -157,7 +192,6 @@ export default function MapView() {
 
   const defaultCenter: [number, number] = [52.3676, 4.9041]; // Amsterdam
 
-  // Filter by status
   const visibleLocations = useMemo(() => {
     let list = locations;
     if (statusFilter !== "ALL") {
@@ -166,7 +200,6 @@ export default function MapView() {
     return list;
   }, [locations, statusFilter]);
 
-  // Filter by search query
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return visibleLocations;
@@ -177,27 +210,12 @@ export default function MapView() {
     );
   }, [visibleLocations, q]);
 
-  // Markers to render (no zoom gating anymore)
-  const markersToRender = useMemo(() => visibleLocations, [visibleLocations]);
-
-  // Compute latest update time based on currently loaded locations
-  useEffect(() => {
-    if (!locations.length) {
-      setLastUpdatedAt(null);
-      return;
-    }
-    const times = locations
-      .map((l) => l.lastReportAt)
-      .filter(Boolean) as string[];
-    if (!times.length) {
-      setLastUpdatedAt(null);
-      return;
-    }
-    const latest = times.reduce((acc, cur) =>
-      new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
-    );
-    setLastUpdatedAt(latest);
-  }, [locations]);
+  // Only render markers when sufficiently zoomed in
+  const markersToRender = useMemo(() => {
+    // tweak this threshold if you like
+    if (!mapZoom || mapZoom < 9) return [];
+    return visibleLocations;
+  }, [mapZoom, visibleLocations]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -260,61 +278,6 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  // Helper to compute bounds object from the current Leaflet map
-  const getCurrentBounds = useCallback((): Bounds | null => {
-    if (!map) return null;
-    const b = map.getBounds();
-    return {
-      north: b.getNorth(),
-      south: b.getSouth(),
-      east: b.getEast(),
-      west: b.getWest(),
-    };
-  }, [map]);
-
-  // Fetch locations whenever map moves/zooms (based on current viewport)
-  useEffect(() => {
-    if (!map || !mapCenter) return;
-
-    const bounds = getCurrentBounds();
-    if (!bounds) return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const list = await fetchLocationsShared({ bounds });
-        if (!cancelled) {
-          setLocations(list);
-        }
-      } catch (e) {
-        console.error("MapView: failed to load bounded locations", e);
-        if (!cancelled) setLocations([]);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [map, mapCenter, getCurrentBounds]);
-
-  // Called after a new report is submitted in the popup
-  const reloadLocationsForCurrentView = useCallback(async () => {
-    if (!map) return;
-    const bounds = getCurrentBounds();
-    if (!bounds) return;
-
-    try {
-      const list = await fetchLocationsShared({
-        bounds,
-        forceRefresh: true,
-      });
-      setLocations(list);
-    } catch (e) {
-      console.error("MapView: failed to reload locations", e);
-    }
-  }, [map, getCurrentBounds]);
-
   if (!leaflet || loadingMap) {
     return (
       <div className="w-full h-[60vh] md:h-[70vh] grid place-items-center">
@@ -331,20 +294,16 @@ export default function MapView() {
     useEffect(() => {
       setMap(m);
 
-      const syncCenter = () => {
-        const c = m.getCenter();
-        setMapCenter({ lat: c.lat, lng: c.lng });
+      const handleZoom = () => {
+        setMapZoom(m.getZoom());
       };
 
-      // initial values
-      syncCenter();
-
-      m.on("zoomend", syncCenter);
-      m.on("moveend", syncCenter);
+      m.on("zoomend", handleZoom);
+      // initialize
+      setMapZoom(m.getZoom());
 
       return () => {
-        m.off("zoomend", syncCenter);
-        m.off("moveend", syncCenter);
+        m.off("zoomend", handleZoom);
       };
     }, [m]);
 
@@ -480,13 +439,20 @@ export default function MapView() {
         </div>
       </div>
 
-      {/* Map */}
+      {/* Map + overlay */}
       <div className="relative w-full h-[60vh] md:h-[70vh]">
+        {/* Hint when zoomed out and markers are hidden */}
+        {mapZoom < 9 && (
+          <div className="absolute z-[850] top-4 left-1/2 -translate-x-1/2 rounded-full bg-white/90 border border-gray-200 px-3 py-1 text-[11px] shadow">
+            🔍 Zoom in om statiegeldmachines te zien
+          </div>
+        )}
+
         <MapContainer
           center={defaultCenter}
           zoom={12}
           scrollWheelZoom
-          preferCanvas={true}
+          preferCanvas={true} // important: better performance with many markers
           className="w-full h-full"
         >
           <MapController />
@@ -510,7 +476,7 @@ export default function MapView() {
             />
           )}
 
-          {/* Locations (always rendered for current viewport) */}
+          {/* Locations (only rendered when zoomed in enough) */}
           {markersToRender.map((l) => {
             const fillColor = colorForStatus(l.currentStatus);
 
@@ -594,7 +560,7 @@ export default function MapView() {
                                 <StatusDot status={r.status} />
                               </span>
                               <span className="text-gray-700">
-                                <b>{statusLabel(r.status as ApiStatus)}</b>
+                                <b>{statusLabel(r.status)}</b>
                                 {r.note ? ` — ${r.note}` : ""}
                                 <span className="text-gray-500">
                                   {" "}
@@ -611,7 +577,7 @@ export default function MapView() {
                     <ReportForm
                       locationId={l.id}
                       onSuccess={async () => {
-                        await reloadLocationsForCurrentView();
+                        await loadLocations(true);
                         showToast("✅ Bedankt! Melding geplaatst.");
                       }}
                     />
@@ -638,7 +604,11 @@ export default function MapView() {
 
 /* ---------- UI helpers ---------- */
 
-function StatusBadge({ status }: { status: ApiStatus | null }) {
+function StatusBadge({
+  status,
+}: {
+  status: ApiStatus | null;
+}) {
   const label = status ? statusLabel(status as ApiStatus) : "Onbekend";
   const color =
     status === "WORKING"
@@ -655,7 +625,11 @@ function StatusBadge({ status }: { status: ApiStatus | null }) {
   );
 }
 
-function StatusDot({ status }: { status: ApiStatus }) {
+function StatusDot({
+  status,
+}: {
+  status: ApiStatus;
+}) {
   const color = colorForStatus(status);
   return (
     <span
