@@ -20,10 +20,10 @@ function statusLabel(s: Status | null) {
 export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
-  const raw = params.retailer || "";
-  const retailer = decodeURIComponent(raw);
-  const title = `Statiegeldmachines bij ${retailer} – statiestatus.nl`;
-  const description = `Overzicht van statiegeldmachines bij ${retailer} op basis van community-meldingen.`;
+  const raw = params?.retailer ?? "";
+  const retailerName = raw || "Onbekende keten";
+  const title = `Statiegeldmachines bij ${retailerName} – statiestatus.nl`;
+  const description = `Overzicht van statiegeldmachines bij ${retailerName} op basis van community-meldingen.`;
 
   return {
     title,
@@ -32,16 +32,18 @@ export async function generateMetadata(
 }
 
 export default async function RetailerPage({ params }: Props) {
-  const raw = params.retailer || "";
-  const retailerName = decodeURIComponent(raw);
+  const raw = params?.retailer ?? "";
+  const retailerName = raw || "Onbekende keten";
 
   const locations = await prisma.location.findMany({
-    where: {
-      retailer: {
-        equals: retailerName,
-        mode: "insensitive",
-      },
-    },
+    where: raw
+      ? {
+          retailer: {
+            equals: raw,
+            mode: "insensitive",
+          },
+        }
+      : undefined,
     include: {
       reports: {
         orderBy: { createdAt: "desc" },
@@ -62,9 +64,7 @@ export default async function RetailerPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: `Statiegeldmachines bij ${retailerName}`,
-    url: `https://www.statiestatus.nl/keten/${encodeURIComponent(
-      retailerName
-    )}`,
+    url: `https://www.statiestatus.nl/keten/${encodeURIComponent(raw)}`,
   };
 
   return (
@@ -90,13 +90,13 @@ export default async function RetailerPage({ params }: Props) {
         </p>
       </section>
 
-      {withStatus.length === 0 && (
+      {!withStatus.length && (
         <p className="text-sm text-gray-500">
           Nog geen machines bekend voor deze keten.
         </p>
       )}
 
-      {withStatus.length > 0 && (
+      {!!withStatus.length && (
         <section className="space-y-3">
           <div className="text-xs text-gray-500">
             {withStatus.length} locaties

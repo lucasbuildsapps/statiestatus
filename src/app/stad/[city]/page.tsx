@@ -20,12 +20,13 @@ function statusLabel(s: Status | null) {
 export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
-  const cityName = decodeURIComponent(params.city || "");
-  const niceCity =
+  const rawCity = params?.city ?? "";
+  const cityName = rawCity || "Onbekend";
+  const prettyCity =
     cityName.charAt(0).toUpperCase() + cityName.slice(1);
 
-  const title = `Statiegeldmachines in ${niceCity} – statiestatus.nl`;
-  const description = `Bekijk de status van statiegeldmachines in ${niceCity}: recente meldingen en community-data.`;
+  const title = `Statiegeldmachines in ${prettyCity} – statiestatus.nl`;
+  const description = `Bekijk de status van statiegeldmachines in ${prettyCity}: recente meldingen en community-data.`;
 
   return {
     title,
@@ -34,16 +35,24 @@ export async function generateMetadata(
 }
 
 export default async function CityPage({ params }: Props) {
-  const rawCity = params.city || "";
-  const cityName = decodeURIComponent(rawCity);
+  const rawCity = params?.city ?? "";
+  // We trust what Next gives us here – no extra decode.
+  const cityName = rawCity;
+  const prettyCity =
+    cityName
+      ? cityName.charAt(0).toUpperCase() + cityName.slice(1)
+      : "Onbekend";
 
+  // If cityName is empty, we just won't match anything
   const locations = await prisma.location.findMany({
-    where: {
-      city: {
-        equals: cityName,
-        mode: "insensitive",
-      },
-    },
+    where: cityName
+      ? {
+          city: {
+            equals: cityName,
+            mode: "insensitive",
+          },
+        }
+      : undefined,
     include: {
       reports: {
         orderBy: { createdAt: "desc" },
@@ -60,13 +69,10 @@ export default async function CityPage({ params }: Props) {
     currentStatus: deriveStatus(loc.reports),
   }));
 
-  const niceCity =
-    cityName.charAt(0).toUpperCase() + cityName.slice(1);
-
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: `Statiegeldmachines in ${niceCity}`,
+    name: `Statiegeldmachines in ${prettyCity}`,
     url: `https://www.statiestatus.nl/stad/${encodeURIComponent(
       cityName
     )}`,
@@ -87,21 +93,21 @@ export default async function CityPage({ params }: Props) {
           · Stad
         </p>
         <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">
-          Statiegeldmachines in {niceCity}
+          Statiegeldmachines in {prettyCity}
         </h1>
         <p className="text-sm text-gray-600">
-          Overzicht van statiegeldmachines in {niceCity}. Gegevens zijn
-          gebaseerd op community-meldingen en zijn indicatief.
+          Overzicht van statiegeldmachines in {prettyCity}. Gegevens
+          zijn gebaseerd op community-meldingen en zijn indicatief.
         </p>
       </section>
 
-      {withStatus.length === 0 && (
+      {!withStatus.length && (
         <p className="text-sm text-gray-500">
           Nog geen machines bekend in deze stad.
         </p>
       )}
 
-      {withStatus.length > 0 && (
+      {!!withStatus.length && (
         <section className="space-y-3">
           <div className="text-xs text-gray-500">
             {withStatus.length} locaties
