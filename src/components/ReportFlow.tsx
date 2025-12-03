@@ -30,7 +30,6 @@ type MachineWithDistance = Machine & {
 type Screen =
   | "intro"
   | "locating"
-  | "choose-auto"
   | "choose-manual"
   | "report"
   | "submitting"
@@ -70,9 +69,6 @@ export default function ReportFlow() {
   );
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  const [candidateMachines, setCandidateMachines] = useState<
-    MachineWithDistance[]
-  >([]);
   const [selectedMachine, setSelectedMachine] =
     useState<MachineWithDistance | null>(null);
 
@@ -84,6 +80,7 @@ export default function ReportFlow() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [confirmStandingHere, setConfirmStandingHere] = useState(false);
 
   // fetch machines from shared cache
   useEffect(() => {
@@ -136,6 +133,8 @@ export default function ReportFlow() {
   function startGeolocation() {
     setSubmitError(null);
     setGeoError(null);
+    setSelectedMachine(null);
+    setConfirmStandingHere(false);
 
     if (!hasMachines) {
       setMachinesError("Nog geen machines geladen. Probeer zo opnieuw.");
@@ -172,7 +171,7 @@ export default function ReportFlow() {
       return;
     }
 
-    const withDist = machines.map((m) => ({
+    const withDist: MachineWithDistance[] = machines.map((m) => ({
       ...m,
       distanceKm: haversineKm(position.lat, position.lng, m.lat, m.lng),
     }));
@@ -183,42 +182,25 @@ export default function ReportFlow() {
       return da - db;
     });
 
-    const top = sorted.slice(0, 3);
-    if (top.length === 0) {
+    const best = sorted[0];
+    if (!best) {
       setScreen("choose-manual");
       return;
     }
 
-    const best = top[0];
-    const second = top[1];
-
-    const autoRadiusKm = 0.3; // 300m
-    const minGapKm = 0.1; // 100m
-
-    if (
-      best.distanceKm != null &&
-      best.distanceKm <= autoRadiusKm &&
-      (!second ||
-        second.distanceKm == null ||
-        second.distanceKm - best.distanceKm > minGapKm)
-    ) {
-      setSelectedMachine(best);
-      setScreen("report");
-      return;
-    }
-
-    setCandidateMachines(top);
-    setScreen("choose-auto");
+    setSelectedMachine(best);
+    setScreen("report");
   }
 
   function selectMachineManual(m: MachineWithDistance) {
     setSelectedMachine(m);
+    setConfirmStandingHere(false);
     setScreen("report");
   }
 
   async function submitReport(e: FormEvent) {
     e.preventDefault();
-    if (!selectedMachine || worksNow === null) return;
+    if (!selectedMachine || worksNow === null || !confirmStandingHere) return;
 
     setSubmitError(null);
     setScreen("submitting");
@@ -357,41 +339,6 @@ export default function ReportFlow() {
         </section>
       )}
 
-      {/* CHOOSE AUTO */}
-      {screen === "choose-auto" && (
-        <section className="rounded-2xl border bg-white shadow-sm p-5 space-y-3 text-sm">
-          <p className="font-medium">
-            We vonden meerdere machines in de buurt. Welke wil je melden?
-          </p>
-          <ul className="space-y-2">
-            {candidateMachines.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  onClick={() => selectMachineManual(m)}
-                  className="w-full text-left rounded-xl border px-3 py-2 hover:bg-gray-50"
-                >
-                  <div className="font-medium">{m.name}</div>
-                  <div className="text-xs text-gray-600">
-                    {m.retailer} • {m.city}
-                  </div>
-                  <div className="text-[11px] text-gray-500">
-                    {formatDistance(m.distanceKm)}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            onClick={() => setScreen("choose-manual")}
-            className="w-full rounded-lg border text-xs px-3 py-2"
-          >
-            Toch liever handmatig zoeken
-          </button>
-        </section>
-      )}
-
       {/* CHOOSE MANUAL */}
       {manualSearchEnabled && (
         <section className="rounded-2xl border bg-white shadow-sm p-5 space-y-3 text-sm">
@@ -462,6 +409,24 @@ export default function ReportFlow() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={confirmStandingHere}
+                  onChange={(e) =>
+                    setConfirmStandingHere(e.target.checked)
+                  }
+                />
+                <span>Ja, ik sta nu bij deze statiegeldmachine.</span>
+              </label>
+              <p className="text-[11px] text-gray-500">
+                Klopt dit niet? Gebruik dan &ldquo;Andere machine
+                kiezen&rdquo; onderaan om een andere locatie te selecteren.
+              </p>
             </div>
 
             <form onSubmit={submitReport} className="space-y-3">
@@ -565,8 +530,12 @@ export default function ReportFlow() {
 
               <button
                 type="submit"
-                disabled={worksNow === null || screen === "submitting"}
-                className="w-full rounded-lg bg-black text-white text-sm px-4 py-2.5 disabled:opacity-60"
+                disabled={
+                  worksNow === null ||
+                  screen === "submitting" ||
+                  !confirmStandingHere
+                }
+                className="w-full rounded-lg bg-black text-white text-sm px-4 py-2.5 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {screen === "submitting"
                   ? "Melding versturen…"
@@ -575,7 +544,14 @@ export default function ReportFlow() {
 
               <button
                 type="button"
-                onClick={() => setScreen("intro")}
+                onClick={() => {
+                  setScreen("intro");
+                  setSelectedMachine(null);
+                  setWorksNow(null);
+                  setIssueType(null);
+                  setNote("");
+                  setConfirmStandingHere(false);
+                }}
                 className="w-full rounded-lg border text-xs px-3 py-2"
               >
                 Andere machine kiezen
@@ -621,6 +597,7 @@ export default function ReportFlow() {
                 setNote("");
                 setSubmitError(null);
                 setSelectedMachine(null);
+                setConfirmStandingHere(false);
                 setScreen("intro");
               }}
               className="w-full rounded-lg border text-xs px-3 py-2"

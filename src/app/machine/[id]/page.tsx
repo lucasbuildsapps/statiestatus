@@ -25,7 +25,8 @@ async function loadLocation(idParam: string | undefined) {
     const decodedId = decodeParam(idParam);
     if (!decodedId) return null;
 
-    const location = await prisma.location.findUnique({
+    // IMPORTANT: use findFirst instead of findUnique to avoid schema issues
+    const location = await prisma.location.findFirst({
       where: { id: decodedId },
       include: {
         reports: {

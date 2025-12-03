@@ -10,6 +10,7 @@ const navItems = [
   { href: "#nearby", label: "In de buurt", type: "anchor" as const },
   { href: "/over", label: "Over", type: "link" as const },
   { href: "/stats", label: "Stats", type: "link" as const },
+  { href: "/reports", label: "Snel melden", type: "link" as const },
   { href: "/contact", label: "Contact", type: "link" as const },
 ];
 
@@ -17,7 +18,12 @@ export default function NavBar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const isHome = pathname === "/";
   const handleClick = () => setOpen(false);
+
+  const visibleItems = navItems.filter((item) =>
+    item.type === "anchor" ? isHome : true
+  );
 
   return (
     <header className="border-b bg-white/90 backdrop-blur sticky top-0 z-[1000]">
@@ -28,7 +34,7 @@ export default function NavBar() {
 
         {/* Desktop nav */}
         <div className="hidden sm:flex gap-4 text-xs sm:text-sm">
-          {navItems.map((item) =>
+          {visibleItems.map((item) =>
             item.type === "anchor" ? (
               <a
                 key={item.href}
@@ -68,9 +74,9 @@ export default function NavBar() {
 
       {/* Mobile dropdown */}
       {open && (
-        <div className="sm:hidden border-top bg-white/95 backdrop-blur">
+        <div className="sm:hidden border-t bg-white/95 backdrop-blur">
           <div className="max-w-6xl mx-auto px-3 py-2 flex flex-col gap-1 text-sm">
-            {navItems.map((item) =>
+            {visibleItems.map((item) =>
               item.type === "anchor" ? (
                 <a
                   key={item.href}

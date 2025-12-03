@@ -1,4 +1,5 @@
 // src/app/page.tsx
+import Link from "next/link";
 import type { Metadata } from "next";
 import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
@@ -69,6 +70,21 @@ export default function Page() {
               status te rapporteren. Geen account nodig, geen reclame, volledig
               community-gedreven.
             </p>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link
+                href="/reports"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-black text-white text-xs sm:text-sm font-medium hover:bg-gray-900"
+              >
+                ⚡ Snel melding maken
+              </Link>
+              <a
+                href="#kaart"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full border text-xs sm:text-sm text-gray-800 bg-white hover:bg-gray-50"
+              >
+                Kaart bekijken
+              </a>
+            </div>
           </div>
 
           <p className="text-xs sm:text-sm text-gray-500">
