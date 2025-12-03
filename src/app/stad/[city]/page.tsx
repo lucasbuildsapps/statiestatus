@@ -5,10 +5,20 @@ import { deriveStatus } from "@/lib/derive";
 import { Status } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type Props = {
   params: { city?: string };
 };
+
+function decodeParam(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 function statusLabel(s: Status | null) {
   if (s === "WORKING") return "Werkend";
@@ -17,10 +27,8 @@ function statusLabel(s: Status | null) {
   return "Onbekend";
 }
 
-export async function generateMetadata(
-  { params }: Props
-): Promise<Metadata> {
-  const rawCity = params?.city ?? "";
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const rawCity = decodeParam(params?.city ?? "");
   if (!rawCity) {
     return {
       title: "Statiegeldmachines per stad – statiestatus.nl",
@@ -29,8 +37,7 @@ export async function generateMetadata(
     };
   }
 
-  const prettyCity =
-    rawCity.charAt(0).toUpperCase() + rawCity.slice(1);
+  const prettyCity = rawCity.charAt(0).toUpperCase() + rawCity.slice(1);
 
   return {
     title: `Statiegeldmachines in ${prettyCity} – statiestatus.nl`,
@@ -39,10 +46,10 @@ export async function generateMetadata(
 }
 
 export default async function CityPage({ params }: Props) {
-  const rawCity = params?.city ?? "";
+  const cityName = decodeParam(params?.city ?? "");
 
   // If no city param, don't query everything – just show a friendly message
-  if (!rawCity) {
+  if (!cityName) {
     return (
       <main className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-5">
         <section className="space-y-2">
@@ -80,9 +87,7 @@ export default async function CityPage({ params }: Props) {
     );
   }
 
-  const cityName = rawCity;
-  const prettyCity =
-    cityName.charAt(0).toUpperCase() + cityName.slice(1);
+  const prettyCity = cityName.charAt(0).toUpperCase() + cityName.slice(1);
 
   const locations = await prisma.location.findMany({
     where: {
@@ -111,9 +116,7 @@ export default async function CityPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: `Statiegeldmachines in ${prettyCity}`,
-    url: `https://www.statiestatus.nl/stad/${encodeURIComponent(
-      cityName
-    )}`,
+    url: `https://www.statiestatus.nl/stad/${encodeURIComponent(cityName)}`,
   };
 
   return (
@@ -193,9 +196,7 @@ export default async function CityPage({ params }: Props) {
                     Details
                   </a>
                   <a
-                    href={`/?location=${encodeURIComponent(
-                      l.id
-                    )}#kaart`}
+                    href={`/?location=${encodeURIComponent(l.id)}#kaart`}
                     className="text-[11px] text-gray-500 hover:underline"
                   >
                     Op kaart

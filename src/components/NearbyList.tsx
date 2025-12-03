@@ -212,7 +212,7 @@ export default function NearbyList() {
 
   return (
     <section className="space-y-4 text-sm">
-      <div className="flex items-baseline justify_between gap-2">
+      <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">In de buurt</h2>
         {loading && (
           <span className="text-xs text-gray-400">Laden…</span>
@@ -246,7 +246,7 @@ export default function NearbyList() {
           <ul className="space-y-2">
             {favoriteLocations.map((l) => {
               const keyWorking = `${l.id}-WORKING`;
-              const keyOut = `${l.id}-OUT`;
+              const keyOut = `${l.id}-OUT_OF_ORDER`;
 
               return (
                 <li

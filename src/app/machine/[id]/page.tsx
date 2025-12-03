@@ -5,17 +5,29 @@ import { deriveStatus } from "@/lib/derive";
 import { Status } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type Props = {
   params: { id?: string };
 };
 
-async function loadLocation(id: string | undefined) {
+function decodeParam(value: string | undefined): string | null {
+  if (!value) return null;
   try {
-    if (!id || typeof id !== "string") return null;
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
-    const location = await prisma.location.findUnique({
-      where: { id },
+async function loadLocation(idParam: string | undefined) {
+  try {
+    const decodedId = decodeParam(idParam);
+    if (!decodedId) return null;
+
+    // IMPORTANT: use findFirst instead of findUnique to avoid schema issues
+    const location = await prisma.location.findFirst({
+      where: { id: decodedId },
       include: {
         reports: {
           orderBy: { createdAt: "desc" },
@@ -35,9 +47,7 @@ async function loadLocation(id: string | undefined) {
   }
 }
 
-export async function generateMetadata(
-  _props: Props
-): Promise<Metadata> {
+export async function generateMetadata(_props: Props): Promise<Metadata> {
   const baseTitle = "Statiegeldmachine – statiestatus.nl";
 
   return {
@@ -79,8 +89,8 @@ function timeAgo(iso?: Date | string | null) {
 }
 
 export default async function MachinePage({ params }: Props) {
-  const id = params?.id;
-  const data = await loadLocation(id);
+  const rawId = params?.id;
+  const data = await loadLocation(rawId);
 
   if (!data) {
     return (
@@ -98,11 +108,11 @@ export default async function MachinePage({ params }: Props) {
           We konden deze statiegeldmachine niet vinden. Mogelijk is de link
           verouderd of is de locatie verwijderd.
         </p>
-        {id && (
+        {rawId && (
           <p className="text-[11px] text-gray-400">
             Gevraagde locatie-ID:{" "}
             <code className="px-1 py-0.5 rounded bg-gray-100">
-              {id}
+              {rawId}
             </code>
           </p>
         )}
@@ -130,12 +140,8 @@ export default async function MachinePage({ params }: Props) {
 
   const lastReport = reports[0] ?? null;
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
-  const outCount = reports.filter(
-    (r) => r.status === "OUT_OF_ORDER"
-  ).length;
-  const issuesCount = reports.filter(
-    (r) => r.status === "ISSUES"
-  ).length;
+  const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
+  const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
 
   const totalReports = reports.length;
   const statusLabel = statusToLabel(currentStatus);
