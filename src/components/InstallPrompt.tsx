@@ -3,171 +3,95 @@
 
 import { useEffect, useState } from "react";
 
-declare global {
-  interface BeforeInstallPromptEvent extends Event {
-    prompt: () => Promise<void>;
-    userChoice: Promise<{
-      outcome: "accepted" | "dismissed";
-      platform: string;
-    }>;
-  }
-}
-
-type OS = "ios" | "android" | "other";
-
-function detectOS(): OS {
-  if (typeof navigator === "undefined") return "other";
-  const ua = navigator.userAgent.toLowerCase();
-
-  if (/iphone|ipad|ipod/.test(ua)) return "ios";
-  if (/android/.test(ua)) return "android";
-  return "other";
-}
-
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallButton, setShowInstallButton] = useState(false);
-  const [showHint, setShowHint] = useState(false);
-  const [os, setOs] = useState<OS>("other");
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    setOs(detectOS());
-
-    let dismissed = false;
-    try {
-      dismissed =
-        window.localStorage.getItem("statiestatus:installDismissed") === "1";
-    } catch {
-      // ignore
+    function handleBeforeInstallPrompt(e: Event) {
+      // Some browsers send a generic Event, others a BeforeInstallPromptEvent
+      e.preventDefault();
+      const evt = e as BeforeInstallPromptEvent;
+      setDeferredPrompt(evt);
+      setVisible(true); // show every time when event fires
     }
-    if (dismissed) return;
 
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // @ts-expect-error - iOS Safari specific
-      window.navigator.standalone === true;
-
-    if (isStandalone) return;
-
-    const handler = (e: Event) => {
-      const ev = e as BeforeInstallPromptEvent;
-      ev.preventDefault();
-      setDeferredPrompt(ev);
-      setShowInstallButton(true);
-      setShowHint(true);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-
-    // Fallback: if no event after a few seconds on mobile, show hint only
-    const fallbackTimer = window.setTimeout(() => {
-      if (!deferredPrompt && (detectOS() === "ios" || detectOS() === "android")) {
-        setShowHint(true);
-      }
-    }, 4000);
-
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-      window.clearTimeout(fallbackTimer);
-    };
-  }, [deferredPrompt]);
-
-  function dismiss() {
-    setShowInstallButton(false);
-    setShowHint(false);
-    try {
-      window.localStorage.setItem(
-        "statiestatus:installDismissed",
-        "1"
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
       );
+    };
+  }, []);
+
+  if (!visible || !deferredPrompt) return null;
+
+  async function handleInstall() {
+    try {
+      await deferredPrompt.prompt();
     } catch {
       // ignore
+    } finally {
+      // hide after user interacts once this visit
+      setVisible(false);
+      setDeferredPrompt(null);
     }
   }
 
-  async function handleInstallClick() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      dismiss();
-    }
-  }
-
-  if (!showHint && !showInstallButton) return null;
-
-  // OS specific message
-  let stepsTitle = "Zo gebruik je statiestatus.nl als app";
-  let steps: string[] = [];
-
-  if (os === "ios") {
-    stepsTitle = "statiestatus.nl op je iPhone als app";
-    steps = [
-      "Open statiestatus.nl in Safari.",
-      "Tik onderin op het deel-icoon (vierkant met pijltje omhoog).",
-      "Kies 'Zet op beginscherm'.",
-      "Tik op 'Voeg toe'.",
-    ];
-  } else if (os === "android") {
-    stepsTitle = "statiestatus.nl op je Android als app";
-    steps = [
-      "Open statiestatus.nl in Chrome.",
-      "Tik rechtsboven op het menu (⋮).",
-      "Kies 'App installeren' of 'Toevoegen aan startscherm'.",
-      "Bevestig om de app toe te voegen.",
-    ];
-  } else {
-    stepsTitle = "statiestatus.nl als app gebruiken";
-    steps = [
-      "Open statiestatus.nl in je browser.",
-      "Gebruik het browsermenu om 'App installeren' of 'Toevoegen aan startscherm' te kiezen (indien beschikbaar).",
-    ];
+  function handleClose() {
+    // Only hide for this visit; next page load can show again
+    setVisible(false);
   }
 
   return (
-    <div className="fixed bottom-16 right-3 z-[960] max-w-xs">
-      <div className="rounded-2xl border bg-white shadow-md px-3 py-3 text-xs flex gap-2 items-start">
-        <div className="mt-0.5">📱</div>
-        <div className="flex-1 space-y-1">
-          <div className="font-medium">Gebruik statiestatus.nl als app</div>
-
-          <p className="text-gray-600">
-            Voeg statiestatus.nl toe aan je beginscherm voor snelle toegang,
-            zonder browserbalk.
-          </p>
-
-          <div className="mt-1 space-y-1">
-            <div className="font-semibold text-[11px] text-gray-700">
-              {stepsTitle}
-            </div>
-            <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-gray-600">
-              {steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
+    <div className="fixed bottom-4 inset-x-4 z-[1100] md:inset-x-auto md:right-6 md:max-w-sm">
+      <div className="rounded-2xl border bg-white shadow-lg px-4 py-3 text-sm flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-gray-900">
+              statiestatus.nl als app installeren
+            </p>
+            <p className="text-xs text-gray-600">
+              Voeg statiestatus.nl toe aan je startscherm voor snelle toegang
+              tot de kaart en machines in de buurt.
+            </p>
           </div>
-
-          <div className="flex gap-2 pt-2">
-            {showInstallButton && deferredPrompt && (
-              <button
-                type="button"
-                onClick={handleInstallClick}
-                className="px-2.5 py-1 rounded-lg bg-black text-white"
-              >
-                App installeren
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={dismiss}
-              className="px-2.5 py-1 rounded-lg border bg-gray-50"
-            >
-              Later
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-xs text-gray-400 hover:text-gray-600"
+            aria-label="Sluiten"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-xs px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50"
+          >
+            Later
+          </button>
+          <button
+            type="button"
+            onClick={handleInstall}
+            className="text-xs px-3 py-1.5 rounded-lg bg-black text-white hover:bg-gray-900"
+          >
+            Installeren
+          </button>
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Type only used locally so we don't need a global declaration.
+ */
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  prompt: () => Promise<void>;
 }
