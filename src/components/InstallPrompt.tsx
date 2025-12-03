@@ -29,6 +29,9 @@ export default function InstallPrompt() {
   if (!visible || !deferredPrompt) return null;
 
   async function handleInstall() {
+    // TS + runtime safety: state could be cleared between render and click
+    if (!deferredPrompt) return;
+
     try {
       await deferredPrompt.prompt();
     } catch {
