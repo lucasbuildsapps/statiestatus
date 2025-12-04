@@ -201,6 +201,16 @@ export default function RetailerPageClient() {
 
   // Loaded
   const { retailer: retailerName, locations } = state;
+  const total = locations.length || 1;
+  const workingCount = locations.filter(
+    (l) => l.currentStatus === "WORKING"
+  ).length;
+  const problemCount = locations.filter(
+    (l) => l.currentStatus === "OUT_OF_ORDER" || l.currentStatus === "ISSUES"
+  ).length;
+
+  const workingPct = Math.round((workingCount / total) * 100);
+  const problemPct = Math.round((problemCount / total) * 100);
 
   return (
     <main className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -235,6 +245,61 @@ export default function RetailerPageClient() {
         </div>
       </section>
 
+      {/* Summary cards */}
+      <section className="grid sm:grid-cols-3 gap-3 text-sm">
+        <div className="rounded-2xl border bg-white p-3">
+          <div className="text-[11px] text-gray-500 mb-1">
+            Aantal machines bij deze keten
+          </div>
+          <div className="text-2xl font-semibold">{locations.length}</div>
+        </div>
+        <div className="rounded-2xl border bg-white p-3">
+          <div className="text-[11px] text-gray-500 mb-1">
+            Machines met status &ldquo;Werkend&rdquo;
+          </div>
+          <div className="text-xl font-semibold">{workingCount}</div>
+        </div>
+        <div className="rounded-2xl border bg-white p-3">
+          <div className="text-[11px] text-gray-500 mb-1">
+            Machines met problemen / stuk
+          </div>
+          <div className="text-xl font-semibold">{problemCount}</div>
+        </div>
+      </section>
+
+      {/* Simple bar graph */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">Statusverdeling</h2>
+        {locations.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Er zijn nog geen machines voor deze keten in de database.
+          </p>
+        ) : (
+          <>
+            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${workingPct}%` }}
+              />
+              <div
+                className="h-full bg-red-400"
+                style={{
+                  width: `${problemPct}%`,
+                  marginLeft: `${workingPct}%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-gray-600">
+              <span>{workingPct}% machines &ldquo;Werkend&rdquo;</span>
+              <span>
+                {problemPct}% machines met problemen / buiten gebruik
+              </span>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* List of machines */}
       <section className="space-y-3">
         <div className="text-xs text-gray-500">
           {locations.length} locaties
