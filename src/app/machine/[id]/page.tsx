@@ -102,6 +102,43 @@ function confidenceClasses(c: Confidence) {
   return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
+// ---------- Reports over time helpers ----------
+
+type DailyBucket = {
+  label: string;
+  working: number;
+  problem: number;
+};
+
+function buildDailyBuckets(reports: ApiReport[], days: number = 30): DailyBucket[] {
+  const now = new Date();
+  const buckets: DailyBucket[] = [];
+  const keyToIndex = new Map<string, number>();
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+    const label = `${d.getDate()}/${d.getMonth() + 1}`;
+    keyToIndex.set(key, buckets.length);
+    buckets.push({ label, working: 0, problem: 0 });
+  }
+
+  for (const r of reports) {
+    const key = new Date(r.createdAt).toISOString().slice(0, 10);
+    const idx = keyToIndex.get(key);
+    if (idx == null) continue;
+
+    if (r.status === "WORKING") {
+      buckets[idx].working += 1;
+    } else {
+      buckets[idx].problem += 1;
+    }
+  }
+
+  return buckets;
+}
+
 // ---------- Page component ----------
 
 export default function MachinePageClient() {
@@ -112,43 +149,6 @@ export default function MachinePageClient() {
   }, [pathname]);
 
   const [state, setState] = useState<LoadState>({ type: "idle" });
-
-  // quick report UI state
-  const [quickLoading, setQuickLoading] = useState<
-    "WORKING" | "OUT_OF_ORDER" | null
-  >(null);
-  const [quickMsg, setQuickMsg] = useState<string | null>(null);
-
-  // helper to (re)load location
-  async function fetchLocation(locationId: string) {
-    try {
-      const res = await fetch(`/api/machine/${encodeURIComponent(locationId)}`, {
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        if (res.status === 404) {
-          setState({ type: "not-found" });
-          return;
-        }
-        const data = await res.json().catch(() => null);
-        const msg =
-          (data as any)?.error ||
-          `Er ging iets mis bij het laden (status ${res.status}).`;
-        setState({ type: "error", message: msg });
-        return;
-      }
-
-      const data = (await res.json()) as { location: ApiLocation };
-      setState({ type: "loaded", location: data.location });
-    } catch (e) {
-      console.error("Error fetching machine:", e);
-      setState({
-        type: "error",
-        message: "Netwerkfout bij het ophalen van de locatie.",
-      });
-    }
-  }
 
   useEffect(() => {
     if (!id) {
@@ -200,39 +200,6 @@ export default function MachinePageClient() {
       cancelled = true;
     };
   }, [id]);
-
-  // quick report handler
-  async function handleQuickReport(status: "WORKING" | "OUT_OF_ORDER") {
-    if (state.type !== "loaded") return;
-    const locationId = state.location.id;
-
-    setQuickLoading(status);
-    setQuickMsg(null);
-    try {
-      const res = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId,
-          status,
-          note: "",
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setQuickMsg(data?.error || "Er ging iets mis bij het plaatsen.");
-        return;
-      }
-
-      setQuickMsg("✅ Bedankt! Je melding is geplaatst.");
-      // reload stats for this machine
-      await fetchLocation(locationId);
-    } catch {
-      setQuickMsg("Netwerkfout bij het verzenden.");
-    } finally {
-      setQuickLoading(null);
-    }
-  }
 
   if (state.type === "idle" || state.type === "loading") {
     return (
@@ -345,6 +312,11 @@ export default function MachinePageClient() {
 
   const statusLabel = statusToLabel(location.currentStatus);
   const confidence = deriveConfidence(reports);
+  const buckets = buildDailyBuckets(reports, 30);
+  const maxDailyTotal = Math.max(
+    1,
+    ...buckets.map((b) => b.working + b.problem)
+  );
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -414,38 +386,32 @@ export default function MachinePageClient() {
             Alle machines bij {location.retailer}
           </a>
         </div>
-
-        {/* Quick report CTA */}
-        <div className="mt-3 rounded-2xl border bg-white p-3 space-y-2 text-xs sm:text-sm">
-          <p className="font-medium">Sta je nu bij deze machine?</p>
-          <p className="text-[11px] text-gray-600">
-            Meld met één klik of hij op dit moment werkt. Je melding is anoniem.
-          </p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => handleQuickReport("WORKING")}
-              disabled={quickLoading === "WORKING"}
-              className="flex-1 min-w-[120px] rounded-lg border bg-white px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
-            >
-              {quickLoading === "WORKING" ? "Bezig…" : "✅ Werkt nu"}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickReport("OUT_OF_ORDER")}
-              disabled={quickLoading === "OUT_OF_ORDER"}
-              className="flex-1 min-w-[120px] rounded-lg border bg-white px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
-            >
-              {quickLoading === "OUT_OF_ORDER" ? "Bezig…" : "❌ Werkt niet"}
-            </button>
-          </div>
-          {quickMsg && (
-            <p className="text-[11px] text-gray-600 pt-1">{quickMsg}</p>
-          )}
-        </div>
       </section>
 
-      {/* Stats cards – counts only, no percentages */}
+      {/* Quick report box */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">Sta je nu bij deze machine?</h2>
+        <p className="text-xs text-gray-600">
+          Meld met één klik of hij op dit moment werkt. Je melding is anoniem.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-900">
+            <span>✅ Werkt nu</span>
+          </button>
+          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-red-50 border-red-200 text-red-900">
+            <span>❌ Werkt niet</span>
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500">
+          Gebruik de knop op de kaart of de pagina{" "}
+          <a href="/reports" className="underline">
+            &ldquo;Snel melding maken&rdquo;
+          </a>{" "}
+          om daadwerkelijk een melding te plaatsen.
+        </p>
+      </section>
+
+      {/* Stats cards */}
       <section className="grid sm:grid-cols-3 gap-3 text-sm">
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
@@ -469,29 +435,97 @@ export default function MachinePageClient() {
         </div>
       </section>
 
-      {/* Extra info about what the reports say */}
-      <section className="rounded-2xl border bg-white p-4 space-y-2 text-sm">
-        <h2 className="text-base font-semibold">Samenvatting meldingen</h2>
+      {/* Reports over time chart */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">
+          Meldingen afgelopen 30 dagen
+        </h2>
         {reports.length === 0 ? (
           <p className="text-xs text-gray-500">
             Er zijn nog geen meldingen voor deze machine.
           </p>
         ) : (
-          <ul className="text-xs text-gray-600 space-y-1">
-            <li>
-              • {workingCount}× gemeld als <b>werkend</b>
-            </li>
-            <li>
-              • {outCount + issuesCount}× gemeld als{" "}
-              <b>storing of problemen</b>
-            </li>
-            <li>
-              • Betrouwbaarheid: <b>{confidenceLabel(confidence)}</b>
-            </li>
-          </ul>
+          <>
+            <div className="w-full h-28 sm:h-32">
+              <svg
+                viewBox="0 0 120 40"
+                className="w-full h-full overflow-visible"
+                aria-hidden="true"
+              >
+                {/* Baseline */}
+                <line
+                  x1={0}
+                  x2={120}
+                  y1={36}
+                  y2={36}
+                  stroke="#e5e7eb"
+                  strokeWidth={0.5}
+                />
+                {buckets.map((b, idx) => {
+                  const total = b.working + b.problem;
+                  if (!total) return null;
+                  const barWidth = 120 / buckets.length;
+                  const x = idx * barWidth + barWidth * 0.15;
+                  const width = barWidth * 0.7;
+
+                  const maxHeight = 28;
+                  const workingHeight =
+                    (b.working / maxDailyTotal) * maxHeight;
+                  const problemHeight =
+                    (b.problem / maxDailyTotal) * maxHeight;
+
+                  const yWorking = 36 - workingHeight;
+                  const yProblem = yWorking - problemHeight;
+
+                  return (
+                    <g key={idx}>
+                      {/* Problems (bottom of bar) */}
+                      {problemHeight > 0 && (
+                        <rect
+                          x={x}
+                          y={yWorking}
+                          width={width}
+                          height={problemHeight}
+                          rx={1}
+                          fill="#f87171" // red-400
+                        />
+                      )}
+                      {/* Working (stacked above) */}
+                      {workingHeight > 0 && (
+                        <rect
+                          x={x}
+                          y={yProblem}
+                          width={width}
+                          height={workingHeight}
+                          rx={1}
+                          fill="#22c55e" // emerald-500
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-sm bg-emerald-500" />
+                  <span>Werkend</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-sm bg-red-400" />
+                  <span>Storing / problemen</span>
+                </span>
+              </div>
+              <span>
+                Bovenste dagen = recenter · hoogte = aantal meldingen
+              </span>
+            </div>
+          </>
         )}
       </section>
 
+      {/* Recent reports list */}
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
         <h2 className="text-base font-semibold">Recente meldingen</h2>
         {reports.length === 0 && (

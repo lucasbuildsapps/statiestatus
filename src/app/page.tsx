@@ -56,29 +56,30 @@ export default function Page() {
       <main className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-6 sm:space-y-8">
         {/* HERO */}
         <section className="space-y-4">
-          <div className="space-y-3 max-w-2xl">
+          <div className="space-y-4 md:space-y-5 max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Onafhankelijk community-project in Nederland
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 sm:w-12 sm:h-12">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+              <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
                 <Image
                   src="/icon-192.png"
                   alt="Logo statiestatus.nl"
                   fill
                   className="rounded-2xl shadow-sm object-cover"
-                  sizes="48px"
+                  sizes="56px"
                 />
               </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight leading-tight text-slate-900">
                 Zie in één oogopslag welke statiegeldmachines werken
               </h1>
             </div>
 
             <p className="text-gray-700 text-sm sm:text-base md:text-lg">
-              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere bezoekers en zie hoe betrouwbaar elke locatie is.
+              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere
+              bezoekers en zie hoe betrouwbaar elke locatie is.
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -88,7 +89,7 @@ export default function Page() {
               >
                 ⚡ Snel melding maken
               </Link>
-              {/* Removed the separate 'Kaart bekijken' button: map is right below */}
+              {/* Geen aparte 'Kaart bekijken' knop meer: kaart staat direct hieronder */}
             </div>
           </div>
 
