@@ -3,9 +3,6 @@
 
 import { useEffect, useState } from "react";
 
-/**
- * Type only used locally so we don't need a global declaration.
- */
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   prompt: () => Promise<void>;
@@ -17,22 +14,37 @@ export default function InstallPrompt() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    // Don't show the prompt if app is already installed (PWA standalone)
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // iOS Safari
+      (window.navigator as any).standalone;
+
+    if (isStandalone) {
+      return;
+    }
 
     function handleBeforeInstallPrompt(e: Event) {
-      // Some browsers send a generic Event, others a BeforeInstallPromptEvent
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       setDeferredPrompt(evt);
-      setVisible(true); // show when event fires
+      setVisible(true);
+    }
+
+    function handleAppInstalled() {
+      setVisible(false);
+      setDeferredPrompt(null);
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
     return () => {
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt
       );
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
@@ -46,7 +58,6 @@ export default function InstallPrompt() {
     } catch {
       // ignore
     } finally {
-      // hide after user interacts once this visit
       setVisible(false);
       setDeferredPrompt(null);
     }

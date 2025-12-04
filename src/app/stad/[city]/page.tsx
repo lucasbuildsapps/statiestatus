@@ -149,12 +149,6 @@ export default function CityPageClient() {
           >
             ← Terug naar kaart
           </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
-          </a>
         </div>
       </main>
     );
@@ -185,12 +179,6 @@ export default function CityPageClient() {
             className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
           >
             ← Terug naar kaart
-          </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
           </a>
         </div>
       </main>
@@ -233,12 +221,6 @@ export default function CityPageClient() {
             className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
           >
             ← Terug naar kaart
-          </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
           </a>
         </div>
       </section>

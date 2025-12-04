@@ -150,12 +150,6 @@ export default function RetailerPageClient() {
           >
             ← Terug naar kaart
           </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
-          </a>
         </div>
       </main>
     );
@@ -188,12 +182,6 @@ export default function RetailerPageClient() {
           >
             ← Terug naar kaart
           </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
-          </a>
         </div>
       </main>
     );
@@ -225,8 +213,8 @@ export default function RetailerPageClient() {
           Statiegeldmachines bij {retailerName}
         </h1>
         <p className="text-sm text-gray-600">
-          Overzicht van statiegeldmachines bij {retailerName} in Nederland.
-          Gegevens zijn gebaseerd op community-meldingen en zijn indicatief.
+          Overzicht van statiegeldmachines bij {retailerName} in Nederland,
+          gebaseerd op community-meldingen.
         </p>
 
         <div className="flex flex-wrap gap-2 text-xs">
@@ -235,12 +223,6 @@ export default function RetailerPageClient() {
             className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
           >
             ← Terug naar kaart
-          </a>
-          <a
-            href="/"
-            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
-          >
-            Naar startpagina
           </a>
         </div>
       </section>

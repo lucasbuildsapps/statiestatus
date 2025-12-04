@@ -1,5 +1,6 @@
 // src/app/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
@@ -58,16 +59,28 @@ export default function Page() {
           <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Onafhankelijk community-project in Nederland
+              Live community project in Nederland
             </div>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
-              Zie in één oogopslag welke statiegeldmachines werken
-            </h1>
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 sm:w-12 sm:h-12">
+                <Image
+                  src="/icon-192.png"
+                  alt="Logo statiestatus.nl"
+                  fill
+                  className="rounded-2xl shadow-sm object-cover"
+                  sizes="48px"
+                />
+              </div>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
+                statiestatus.nl
+              </h1>
+            </div>
 
             <p className="text-gray-700 text-sm sm:text-base md:text-lg">
-              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere
-              bezoekers en zie hoe betrouwbaar elke locatie is.
+              Controleer of een statiegeldmachine werkt en help anderen door de
+              status te rapporteren. Geen account nodig, geen reclame, volledig
+              community-gedreven.
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -75,14 +88,15 @@ export default function Page() {
                 href="/reports"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-black text-white text-xs sm:text-sm font-medium hover:bg-gray-900"
               >
-                📍 Ik sta nu bij een machine
+                ⚡ Snel melding maken
               </Link>
+              {/* Removed the separate 'Kaart bekijken' button: map is right below */}
             </div>
           </div>
 
           <p className="text-xs sm:text-sm text-gray-500">
-            Gegevens zijn gebaseerd op community-meldingen en zijn indicatief,
-            niet officieel.
+            Laatste update: real-time uit community-meldingen • gegevens zijn
+            indicatief en niet officieel.
           </p>
         </section>
 
@@ -107,7 +121,7 @@ export default function Page() {
               href="#kaart"
               className="flex-1 text-center text-xs font-medium px-3 py-2 rounded-xl bg-black text-white"
             >
-              🔍 Naar kaart
+              🔍 Terug naar kaart
             </a>
           </div>
         </div>
