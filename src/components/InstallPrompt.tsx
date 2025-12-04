@@ -3,18 +3,28 @@
 
 import { useEffect, useState } from "react";
 
+/**
+ * Type only used locally so we don't need a global declaration.
+ */
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  prompt: () => Promise<void>;
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     function handleBeforeInstallPrompt(e: Event) {
       // Some browsers send a generic Event, others a BeforeInstallPromptEvent
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       setDeferredPrompt(evt);
-      setVisible(true); // show every time when event fires
+      setVisible(true); // show when event fires
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -29,7 +39,6 @@ export default function InstallPrompt() {
   if (!visible || !deferredPrompt) return null;
 
   async function handleInstall() {
-    // TS + runtime safety: state could be cleared between render and click
     if (!deferredPrompt) return;
 
     try {
@@ -44,7 +53,6 @@ export default function InstallPrompt() {
   }
 
   function handleClose() {
-    // Only hide for this visit; next page load can show again
     setVisible(false);
   }
 
@@ -89,12 +97,4 @@ export default function InstallPrompt() {
       </div>
     </div>
   );
-}
-
-/**
- * Type only used locally so we don't need a global declaration.
- */
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  prompt: () => Promise<void>;
 }

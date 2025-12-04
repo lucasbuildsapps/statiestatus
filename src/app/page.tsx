@@ -58,17 +58,16 @@ export default function Page() {
           <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Live community project in Nederland
+              Onafhankelijk community-project in Nederland
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
-              statiestatus.nl
+              Zie in één oogopslag welke statiegeldmachines werken
             </h1>
 
             <p className="text-gray-700 text-sm sm:text-base md:text-lg">
-              Controleer of een statiegeldmachine werkt en help anderen door de
-              status te rapporteren. Geen account nodig, geen reclame, volledig
-              community-gedreven.
+              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere
+              bezoekers en zie hoe betrouwbaar elke locatie is.
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -76,20 +75,14 @@ export default function Page() {
                 href="/reports"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-black text-white text-xs sm:text-sm font-medium hover:bg-gray-900"
               >
-                ⚡ Snel melding maken
+                📍 Ik sta nu bij een machine
               </Link>
-              <a
-                href="#kaart"
-                className="inline-flex items-center justify-center px-4 py-2 rounded-full border text-xs sm:text-sm text-gray-800 bg-white hover:bg-gray-50"
-              >
-                Kaart bekijken
-              </a>
             </div>
           </div>
 
           <p className="text-xs sm:text-sm text-gray-500">
-            Laatste update: real-time uit community-meldingen • gegevens zijn
-            indicatief en niet officieel.
+            Gegevens zijn gebaseerd op community-meldingen en zijn indicatief,
+            niet officieel.
           </p>
         </section>
 
@@ -114,7 +107,7 @@ export default function Page() {
               href="#kaart"
               className="flex-1 text-center text-xs font-medium px-3 py-2 rounded-xl bg-black text-white"
             >
-              🔍 Terug naar kaart
+              🔍 Naar kaart
             </a>
           </div>
         </div>
@@ -130,22 +123,13 @@ export default function Page() {
         <footer className="pt-2 pb-10 text-center text-xs text-gray-500 space-y-1">
           <p>statiestatus.nl • community-project • geen officiële bron</p>
           <p className="space-x-3">
-            <a
-              href="/over"
-              className="underline hover:text-gray-700"
-            >
+            <a href="/over" className="underline hover:text-gray-700">
               Over & veelgestelde vragen
             </a>
-            <a
-              href="/contact"
-              className="underline hover:text-gray-700"
-            >
+            <a href="/contact" className="underline hover:text-gray-700">
               Contact & nieuwe machine
             </a>
-            <a
-              href="/privacy"
-              className="underline hover:text-gray-700"
-            >
+            <a href="/privacy" className="underline hover:text-gray-700">
               Privacy
             </a>
           </p>

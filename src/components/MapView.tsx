@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from "react";
 import type { Map as LMap, CircleMarker as LeafletCircle } from "leaflet";
 import Link from "next/link";
@@ -55,11 +54,37 @@ function timeAgo(iso?: string | null) {
   return `${d}d geleden`;
 }
 
-function confidenceText(total?: number) {
-  if (!total || total < 1)
-    return "Nog weinig meldingen (lage betrouwbaarheid).";
-  if (total < 5) return `Enkele meldingen (${total}).`;
-  return `Betrouwbare status (${total}+ meldingen).`;
+// ---------- Confidence (aggregate version for map) ----------
+
+type Confidence = "low" | "medium" | "high";
+
+function deriveConfidenceFromAggregate(
+  totalReports?: number,
+  lastReportAt?: string | null
+): Confidence {
+  if (!totalReports || totalReports < 1 || !lastReportAt) return "low";
+
+  const now = Date.now();
+  const ageDays =
+    (now - new Date(lastReportAt).getTime()) / (24 * 3600 * 1000);
+
+  // Very simple + readable thresholds
+  if (totalReports >= 10 && ageDays <= 7) return "high";
+  if (totalReports >= 5 && ageDays <= 14) return "medium";
+  if (totalReports >= 3 && ageDays <= 30) return "medium";
+  return "low";
+}
+
+function confidenceLabel(c: Confidence) {
+  if (c === "high") return "Hoge betrouwbaarheid";
+  if (c === "medium") return "Redelijke betrouwbaarheid";
+  return "Lage betrouwbaarheid";
+}
+
+function confidenceClasses(c: Confidence) {
+  if (c === "high") return "bg-emerald-50 text-emerald-900 border-emerald-200";
+  if (c === "medium") return "bg-amber-50 text-amber-900 border-amber-200";
+  return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
 export default function MapView() {
@@ -81,8 +106,11 @@ export default function MapView() {
   const [userInteracted, setUserInteracted] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(true);
 
-  // NEW: id that comes from ?location= in the URL
   const [initialLocationId, setInitialLocationId] = useState<string | null>(
+    null
+  );
+
+  const [submittingQuickId, setSubmittingQuickId] = useState<string | null>(
     null
   );
 
@@ -191,7 +219,7 @@ export default function MapView() {
     );
   }, []);
 
-  // NEW: read ?location= from the URL once on mount
+  // read ?location= from the URL once on mount
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
@@ -285,7 +313,34 @@ export default function MapView() {
     window.prompt("Kopieer deze link:", url);
   }
 
-  // NEW: once map + locations are ready and we have initialLocationId, zoom to it
+  // quick report from popup
+  async function quickReport(
+    locationId: string,
+    status: "WORKING" | "OUT_OF_ORDER"
+  ) {
+    const key = `${locationId}-${status}`;
+    setSubmittingQuickId(key);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId, status, note: "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data?.error || "Er ging iets mis bij het verzenden.");
+        return;
+      }
+      showToast("✅ Bedankt! Melding geplaatst.");
+      await loadLocations(true);
+    } catch {
+      showToast("Netwerkfout bij verzenden.");
+    } finally {
+      setSubmittingQuickId(null);
+    }
+  }
+
+  // zoom to initialLocationId if present
   useEffect(() => {
     if (!initialLocationId || !map || !locations.length) return;
 
@@ -483,6 +538,13 @@ export default function MapView() {
 
           {visibleLocations.map((l) => {
             const fillColor = colorForStatus(l.currentStatus);
+            const keyWorking = `${l.id}-WORKING`;
+            const keyOut = `${l.id}-OUT_OF_ORDER`;
+
+            const confidence = deriveConfidenceFromAggregate(
+              (l as any).totalReports,
+              l.lastReportAt
+            );
 
             return (
               <CircleMarker
@@ -526,15 +588,27 @@ export default function MapView() {
                       </button>
                     </div>
 
-                    {/* Status + reliability */}
+                    {/* Status + confidence + last update */}
                     <div className="flex items-start justify-between gap-2">
-                      <StatusBadge status={l.currentStatus} />
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge status={l.currentStatus} />
+                        <span
+                          className={
+                            "inline-flex items-center rounded-full border px-2 py-[2px] text-[11px] " +
+                            confidenceClasses(confidence)
+                          }
+                        >
+                          {confidenceLabel(confidence)}
+                        </span>
+                      </div>
                       <div className="text-[11px] text-gray-500 text-right">
                         {l.lastReportAt ? (
                           <>
                             Laatste melding {timeAgo(l.lastReportAt)}
-                            {typeof l.totalReports === "number" && (
-                              <div>{confidenceText(l.totalReports)}</div>
+                            {typeof (l as any).totalReports === "number" && (
+                              <div>
+                                {(l as any).totalReports} meldingen totaal
+                              </div>
                             )}
                           </>
                         ) : (
@@ -543,7 +617,31 @@ export default function MapView() {
                       </div>
                     </div>
 
-                    {/* Actions */}
+                    {/* Quick report buttons */}
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => quickReport(l.id, "WORKING")}
+                        disabled={submittingQuickId === keyWorking}
+                        className="flex-1 rounded-lg border bg-white text-xs px-2 py-1.5 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        {submittingQuickId === keyWorking
+                          ? "Bezig…"
+                          : "✅ Werkt nu"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => quickReport(l.id, "OUT_OF_ORDER")}
+                        disabled={submittingQuickId === keyOut}
+                        className="flex-1 rounded-lg border bg-white text-xs px-2 py-1.5 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        {submittingQuickId === keyOut
+                          ? "Bezig…"
+                          : "❌ Stuk nu"}
+                      </button>
+                    </div>
+
+                    {/* Secondary actions */}
                     <div className="flex flex-col gap-1 pt-1">
                       <Link
                         href={`/machine/${l.id}`}
@@ -555,7 +653,7 @@ export default function MapView() {
                         href={`/melden?location=${encodeURIComponent(l.id)}`}
                         className="w-full rounded-lg border text-xs px-3 py-1.5 text-center hover:bg-gray-50"
                       >
-                        Melding plaatsen
+                        Uitgebreid melden
                       </Link>
                       <button
                         type="button"
@@ -596,15 +694,17 @@ function StatusBadge({
   const label = status ? statusLabel(status as ApiStatus) : "Onbekend";
   const color =
     status === "WORKING"
-      ? "bg-emerald-200 text-emerald-900"
+      ? "bg-emerald-50 text-emerald-900"
       : status === "ISSUES"
-      ? "bg-amber-200 text-amber-900"
+      ? "bg-amber-50 text-amber-900"
       : status === "OUT_OF_ORDER"
-      ? "bg-red-200 text-red-900"
-      : "bg-gray-200 text-gray-800";
+      ? "bg-red-50 text-red-900"
+      : "bg-slate-50 text-slate-800";
   return (
-    <span className={`inline-block text-xs px-2 py-1 rounded ${color}`}>
-      Status: <b>{label}</b>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] border ${color}`}
+    >
+      Status: <b className="ml-1">{label}</b>
     </span>
   );
 }
@@ -635,141 +735,5 @@ function Legend() {
         </div>
       ))}
     </div>
-  );
-}
-
-/* ---------- Popup report form (still available if you want it later) ---------- */
-
-type ReportIssueType = "FULL" | "RECEIPT" | "NO_ACCEPT" | "DOWN" | "OTHER";
-
-const ISSUE_LABELS: Record<ReportIssueType, string> = {
-  FULL: "Machine lijkt vol",
-  RECEIPT: "Bon komt niet uit",
-  NO_ACCEPT: "Accepteert geen flessen",
-  DOWN: "Machine lijkt uitgevallen",
-  OTHER: "Anders probleem",
-};
-
-function ReportForm({
-  locationId,
-  onSuccess,
-}: {
-  locationId: string;
-  onSuccess?: () => void | Promise<void>;
-}) {
-  const [status, setStatus] = useState<"WORKING" | "OUT_OF_ORDER">("WORKING");
-  const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
-  const [note, setNote] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setMsg(null);
-
-    const reason =
-      status === "OUT_OF_ORDER" && issueType ? ISSUE_LABELS[issueType] : "";
-
-    const pieces: string[] = [];
-    if (reason) pieces.push(reason);
-    if (note.trim()) pieces.push(note.trim());
-    const finalNote = pieces.join(" — ");
-
-    try {
-      const res = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationId, status, note: finalNote }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setMsg(data?.error || "Er ging iets mis");
-        return;
-      }
-
-      setMsg("✅ Melding geplaatst.");
-      setNote("");
-      setIssueType(null);
-      if (onSuccess) await onSuccess();
-    } catch {
-      setMsg("Netwerkfout");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-2 text-sm">
-      <select
-        value={status}
-        onChange={(e) => {
-          const next = e.target.value as "WORKING" | "OUT_OF_ORDER";
-          setStatus(next);
-          if (next === "WORKING") {
-            setIssueType(null);
-          }
-        }}
-        className="border rounded-lg px-2 py-1 w-full"
-      >
-        <option value="WORKING">✅ Werkend</option>
-        <option value="OUT_OF_ORDER">❌ Stuk</option>
-      </select>
-
-      {status === "OUT_OF_ORDER" && (
-        <div className="space-y-1">
-          <div className="text-xs text-gray-600">
-            Wat lijkt er aan de hand? (optioneel)
-          </div>
-          <div className="flex flex-wrap gap-1.5 text-[11px]">
-            {([
-              { id: "FULL", label: "Machine vol" },
-              { id: "RECEIPT", label: "Bon komt niet uit" },
-              { id: "NO_ACCEPT", label: "Accepteert geen flessen" },
-              { id: "DOWN", label: "Machine uitgevallen" },
-              { id: "OTHER", label: "Anders" },
-            ] as const).map((opt) => {
-              const active = issueType === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() =>
-                    setIssueType(active ? null : opt.id)
-                  }
-                  className={
-                    "px-2.5 py-1 rounded-full border " +
-                    (active
-                      ? "bg-gray-900 text-white border-gray-900"
-                      : "bg-white text-gray-800 hover:bg-gray-50")
-                  }
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Optionele notitie (max 280)"
-        className="border rounded-lg px-2 py-1 w-full"
-        maxLength={280}
-      />
-
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-black text-white px-3 py-1.5 rounded-lg w-full disabled:opacity-70"
-      >
-        {loading ? "Versturen…" : "Melding plaatsen"}
-      </button>
-
-      {msg && <div className="text-xs pt-1">{msg}</div>}
-    </form>
   );
 }

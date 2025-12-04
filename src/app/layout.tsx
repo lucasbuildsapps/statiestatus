@@ -17,7 +17,17 @@ export const metadata: Metadata = {
   title: "statiestatus.nl",
   description: "Check en rapporteer de status van statiegeldmachines.",
   icons: {
-    icon: "/icon.svg",
+    // These should all live in /public
+    icon: [
+      // Favicon for browsers + Google
+      {
+        url: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+    ],
+    // If you later add an apple-touch-icon, you can set:
+    // apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
   themeColor: "#16a34a",

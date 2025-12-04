@@ -58,15 +58,15 @@ function statusToLabel(status: ApiStatus | null) {
 
 function statusToColorClasses(status: ApiStatus | null) {
   if (status === "WORKING")
-    return "bg-emerald-100 text-emerald-900 border-emerald-200";
+    return "bg-emerald-50 text-emerald-900 border-emerald-200";
   if (status === "ISSUES")
-    return "bg-amber-100 text-amber-900 border-amber-200";
+    return "bg-amber-50 text-amber-900 border-amber-200";
   if (status === "OUT_OF_ORDER")
-    return "bg-red-100 text-red-900 border-red-200";
-  return "bg-gray-100 text-gray-800 border-gray-200";
+    return "bg-red-50 text-red-900 border-red-200";
+  return "bg-slate-50 text-slate-800 border-slate-200";
 }
 
-// ---------- Confidence helpers (frontend-only for now) ----------
+// ---------- Confidence helpers ----------
 
 type Confidence = "low" | "medium" | "high";
 
@@ -85,7 +85,6 @@ function deriveConfidence(reports: ApiReport[]): Confidence {
 
   const total = reports.length;
 
-  // Tune these thresholds as you like
   if (last24h >= 3 || last7d >= 5 || total >= 20) return "high";
   if (last24h >= 1 || last7d >= 2 || total >= 5) return "medium";
   return "low";
@@ -98,9 +97,9 @@ function confidenceLabel(c: Confidence) {
 }
 
 function confidenceClasses(c: Confidence) {
-  if (c === "high") return "bg-emerald-100 text-emerald-900 border-emerald-200";
-  if (c === "medium") return "bg-amber-100 text-amber-900 border-amber-200";
-  return "bg-gray-100 text-gray-800 border-gray-200";
+  if (c === "high") return "bg-emerald-50 text-emerald-900 border-emerald-200";
+  if (c === "medium") return "bg-amber-50 text-amber-900 border-amber-200";
+  return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
 // ---------- Page component ----------
@@ -113,6 +112,43 @@ export default function MachinePageClient() {
   }, [pathname]);
 
   const [state, setState] = useState<LoadState>({ type: "idle" });
+
+  // quick report UI state
+  const [quickLoading, setQuickLoading] = useState<
+    "WORKING" | "OUT_OF_ORDER" | null
+  >(null);
+  const [quickMsg, setQuickMsg] = useState<string | null>(null);
+
+  // helper to (re)load location
+  async function fetchLocation(locationId: string) {
+    try {
+      const res = await fetch(`/api/machine/${encodeURIComponent(locationId)}`, {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setState({ type: "not-found" });
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        const msg =
+          (data as any)?.error ||
+          `Er ging iets mis bij het laden (status ${res.status}).`;
+        setState({ type: "error", message: msg });
+        return;
+      }
+
+      const data = (await res.json()) as { location: ApiLocation };
+      setState({ type: "loaded", location: data.location });
+    } catch (e) {
+      console.error("Error fetching machine:", e);
+      setState({
+        type: "error",
+        message: "Netwerkfout bij het ophalen van de locatie.",
+      });
+    }
+  }
 
   useEffect(() => {
     if (!id) {
@@ -164,6 +200,39 @@ export default function MachinePageClient() {
       cancelled = true;
     };
   }, [id]);
+
+  // quick report handler
+  async function handleQuickReport(status: "WORKING" | "OUT_OF_ORDER") {
+    if (state.type !== "loaded") return;
+    const locationId = state.location.id;
+
+    setQuickLoading(status);
+    setQuickMsg(null);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationId,
+          status,
+          note: "",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setQuickMsg(data?.error || "Er ging iets mis bij het plaatsen.");
+        return;
+      }
+
+      setQuickMsg("✅ Bedankt! Je melding is geplaatst.");
+      // reload stats for this machine
+      await fetchLocation(locationId);
+    } catch {
+      setQuickMsg("Netwerkfout bij het verzenden.");
+    } finally {
+      setQuickLoading(null);
+    }
+  }
 
   if (state.type === "idle" || state.type === "loading") {
     return (
@@ -261,17 +330,20 @@ export default function MachinePageClient() {
   const reports = location.reports;
   const lastReport = reports[0] ?? null;
 
+  const now = Date.now();
+  let last7dReports = 0;
+  let last30dReports = 0;
+  for (const r of reports) {
+    const ageMs = now - new Date(r.createdAt).getTime();
+    if (ageMs <= 7 * 24 * 3600 * 1000) last7dReports++;
+    if (ageMs <= 30 * 24 * 3600 * 1000) last30dReports++;
+  }
+
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
-  const totalReports = reports.length || 1; // avoid division by zero
+
   const statusLabel = statusToLabel(location.currentStatus);
-
-  const workingPct = Math.round((workingCount / totalReports) * 100);
-  const problemPct = Math.round(
-    ((outCount + issuesCount) / totalReports) * 100
-  );
-
   const confidence = deriveConfidence(reports);
 
   return (
@@ -342,9 +414,38 @@ export default function MachinePageClient() {
             Alle machines bij {location.retailer}
           </a>
         </div>
+
+        {/* Quick report CTA */}
+        <div className="mt-3 rounded-2xl border bg-white p-3 space-y-2 text-xs sm:text-sm">
+          <p className="font-medium">Sta je nu bij deze machine?</p>
+          <p className="text-[11px] text-gray-600">
+            Meld met één klik of hij op dit moment werkt. Je melding is anoniem.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => handleQuickReport("WORKING")}
+              disabled={quickLoading === "WORKING"}
+              className="flex-1 min-w-[120px] rounded-lg border bg-white px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
+            >
+              {quickLoading === "WORKING" ? "Bezig…" : "✅ Werkt nu"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickReport("OUT_OF_ORDER")}
+              disabled={quickLoading === "OUT_OF_ORDER"}
+              className="flex-1 min-w-[120px] rounded-lg border bg-white px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
+            >
+              {quickLoading === "OUT_OF_ORDER" ? "Bezig…" : "❌ Werkt niet"}
+            </button>
+          </div>
+          {quickMsg && (
+            <p className="text-[11px] text-gray-600 pt-1">{quickMsg}</p>
+          )}
+        </div>
       </section>
 
-      {/* Stats cards */}
+      {/* Stats cards – counts only, no percentages */}
       <section className="grid sm:grid-cols-3 gap-3 text-sm">
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
@@ -356,47 +457,38 @@ export default function MachinePageClient() {
         </div>
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
-            Aantal &ldquo;Werkend&rdquo;
+            Meldingen laatste 30 dagen
           </div>
-          <div className="text-xl font-semibold">{workingCount}</div>
+          <div className="text-xl font-semibold">{last30dReports}</div>
         </div>
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
-            Aantal &ldquo;Stuk/Problemen&rdquo;
+            Meldingen laatste 7 dagen
           </div>
-          <div className="text-xl font-semibold">
-            {outCount + issuesCount}
-          </div>
+          <div className="text-xl font-semibold">{last7dReports}</div>
         </div>
       </section>
 
-      {/* Simple bar "graph" */}
-      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
-        <h2 className="text-base font-semibold">Statusverdeling</h2>
+      {/* Extra info about what the reports say */}
+      <section className="rounded-2xl border bg-white p-4 space-y-2 text-sm">
+        <h2 className="text-base font-semibold">Samenvatting meldingen</h2>
         {reports.length === 0 ? (
           <p className="text-xs text-gray-500">
             Er zijn nog geen meldingen voor deze machine.
           </p>
         ) : (
-          <>
-            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full bg-emerald-500"
-                style={{ width: `${workingPct}%` }}
-              />
-              <div
-                className="h-full bg-red-400"
-                style={{
-                  width: `${problemPct}%`,
-                  marginLeft: `${workingPct}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between text-[11px] text-gray-600">
-              <span>{workingPct}% meldingen &ldquo;Werkend&rdquo;</span>
-              <span>{problemPct}% meldingen met problemen</span>
-            </div>
-          </>
+          <ul className="text-xs text-gray-600 space-y-1">
+            <li>
+              • {workingCount}× gemeld als <b>werkend</b>
+            </li>
+            <li>
+              • {outCount + issuesCount}× gemeld als{" "}
+              <b>storing of problemen</b>
+            </li>
+            <li>
+              • Betrouwbaarheid: <b>{confidenceLabel(confidence)}</b>
+            </li>
+          </ul>
         )}
       </section>
 
