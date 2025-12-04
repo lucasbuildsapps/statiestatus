@@ -10,7 +10,7 @@ import InstallPrompt from "../components/InstallPrompt";
 export const metadata: Metadata = {
   title: "statiestatus.nl – Check de status van statiegeldmachines in Nederland",
   description:
-    "Controleer of een statiegeldmachine werkt en meld jouw ervaring. Geen account nodig, geen reclame, volledig community-gedreven.",
+    "Voorkom een nutteloze rit. Bekijk actuele meldingen van andere bezoekers en zie hoe betrouwbaar elke locatie is.",
   metadataBase: new URL("https://www.statiestatus.nl"),
   alternates: {
     canonical: "https://www.statiestatus.nl/",
@@ -59,7 +59,7 @@ export default function Page() {
           <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-900 border border-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Live community project in Nederland
+              Onafhankelijk community-project in Nederland
             </div>
 
             <div className="flex items-center gap-3">
@@ -73,14 +73,12 @@ export default function Page() {
                 />
               </div>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
-                statiestatus.nl
+                Zie in één oogopslag welke statiegeldmachines werken
               </h1>
             </div>
 
             <p className="text-gray-700 text-sm sm:text-base md:text-lg">
-              Controleer of een statiegeldmachine werkt en help anderen door de
-              status te rapporteren. Geen account nodig, geen reclame, volledig
-              community-gedreven.
+              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere bezoekers en zie hoe betrouwbaar elke locatie is.
             </p>
 
             <div className="flex flex-wrap gap-2 pt-1">
