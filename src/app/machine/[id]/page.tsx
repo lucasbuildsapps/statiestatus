@@ -58,13 +58,88 @@ function statusToLabel(status: ApiStatus | null) {
 
 function statusToColorClasses(status: ApiStatus | null) {
   if (status === "WORKING")
-    return "bg-emerald-100 text-emerald-900 border-emerald-200";
+    return "bg-emerald-50 text-emerald-900 border-emerald-200";
   if (status === "ISSUES")
-    return "bg-amber-100 text-amber-900 border-amber-200";
+    return "bg-amber-50 text-amber-900 border-amber-200";
   if (status === "OUT_OF_ORDER")
-    return "bg-red-100 text-red-900 border-red-200";
-  return "bg-gray-100 text-gray-800 border-gray-200";
+    return "bg-red-50 text-red-900 border-red-200";
+  return "bg-slate-50 text-slate-800 border-slate-200";
 }
+
+// ---------- Confidence helpers ----------
+
+type Confidence = "low" | "medium" | "high";
+
+function deriveConfidence(reports: ApiReport[]): Confidence {
+  if (!reports.length) return "low";
+
+  const now = Date.now();
+  let last24h = 0;
+  let last7d = 0;
+
+  for (const r of reports) {
+    const ageMs = now - new Date(r.createdAt).getTime();
+    if (ageMs <= 24 * 3600 * 1000) last24h++;
+    if (ageMs <= 7 * 24 * 3600 * 1000) last7d++;
+  }
+
+  const total = reports.length;
+
+  if (last24h >= 3 || last7d >= 5 || total >= 20) return "high";
+  if (last24h >= 1 || last7d >= 2 || total >= 5) return "medium";
+  return "low";
+}
+
+function confidenceLabel(c: Confidence) {
+  if (c === "high") return "Hoge betrouwbaarheid";
+  if (c === "medium") return "Redelijke betrouwbaarheid";
+  return "Lage betrouwbaarheid";
+}
+
+function confidenceClasses(c: Confidence) {
+  if (c === "high") return "bg-emerald-50 text-emerald-900 border-emerald-200";
+  if (c === "medium") return "bg-amber-50 text-amber-900 border-amber-200";
+  return "bg-slate-50 text-slate-700 border-slate-200";
+}
+
+// ---------- Reports over time helpers ----------
+
+type DailyBucket = {
+  label: string;
+  working: number;
+  problem: number;
+};
+
+function buildDailyBuckets(reports: ApiReport[], days: number = 30): DailyBucket[] {
+  const now = new Date();
+  const buckets: DailyBucket[] = [];
+  const keyToIndex = new Map<string, number>();
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+    const label = `${d.getDate()}/${d.getMonth() + 1}`;
+    keyToIndex.set(key, buckets.length);
+    buckets.push({ label, working: 0, problem: 0 });
+  }
+
+  for (const r of reports) {
+    const key = new Date(r.createdAt).toISOString().slice(0, 10);
+    const idx = keyToIndex.get(key);
+    if (idx == null) continue;
+
+    if (r.status === "WORKING") {
+      buckets[idx].working += 1;
+    } else {
+      buckets[idx].problem += 1;
+    }
+  }
+
+  return buckets;
+}
+
+// ---------- Page component ----------
 
 export default function MachinePageClient() {
   const pathname = usePathname();
@@ -221,14 +296,27 @@ export default function MachinePageClient() {
   const { location } = state;
   const reports = location.reports;
   const lastReport = reports[0] ?? null;
+
+  const now = Date.now();
+  let last7dReports = 0;
+  let last30dReports = 0;
+  for (const r of reports) {
+    const ageMs = now - new Date(r.createdAt).getTime();
+    if (ageMs <= 7 * 24 * 3600 * 1000) last7dReports++;
+    if (ageMs <= 30 * 24 * 3600 * 1000) last30dReports++;
+  }
+
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
-  const totalReports = reports.length || 1; // avoid division by zero
-  const statusLabel = statusToLabel(location.currentStatus);
 
-  const workingPct = Math.round((workingCount / totalReports) * 100);
-  const problemPct = Math.round(((outCount + issuesCount) / totalReports) * 100);
+  const statusLabel = statusToLabel(location.currentStatus);
+  const confidence = deriveConfidence(reports);
+  const buckets = buildDailyBuckets(reports, 30);
+  const maxDailyTotal = Math.max(
+    1,
+    ...buckets.map((b) => b.working + b.problem)
+  );
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -258,9 +346,19 @@ export default function MachinePageClient() {
               statusToColorClasses(location.currentStatus)
             }
           >
-            <span>Huidige inschatting:</span>
+            <span>Huidige status:</span>
             <span>{statusLabel}</span>
           </span>
+
+          <span
+            className={
+              "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] " +
+              confidenceClasses(confidence)
+            }
+          >
+            {confidenceLabel(confidence)}
+          </span>
+
           {lastReport && (
             <span className="text-xs text-gray-500">
               Laatste melding: {timeAgo(lastReport.createdAt)}
@@ -290,6 +388,29 @@ export default function MachinePageClient() {
         </div>
       </section>
 
+      {/* Quick report box */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">Sta je nu bij deze machine?</h2>
+        <p className="text-xs text-gray-600">
+          Meld met één klik of hij op dit moment werkt. Je melding is anoniem.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-900">
+            <span>✅ Werkt nu</span>
+          </button>
+          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-red-50 border-red-200 text-red-900">
+            <span>❌ Werkt niet</span>
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500">
+          Gebruik de knop op de kaart of de pagina{" "}
+          <a href="/reports" className="underline">
+            &ldquo;Snel melding maken&rdquo;
+          </a>{" "}
+          om daadwerkelijk een melding te plaatsen.
+        </p>
+      </section>
+
       {/* Stats cards */}
       <section className="grid sm:grid-cols-3 gap-3 text-sm">
         <div className="rounded-2xl border bg-white p-3">
@@ -302,50 +423,109 @@ export default function MachinePageClient() {
         </div>
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
-            Aantal &ldquo;Werkend&rdquo;
+            Meldingen laatste 30 dagen
           </div>
-          <div className="text-xl font-semibold">{workingCount}</div>
+          <div className="text-xl font-semibold">{last30dReports}</div>
         </div>
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
-            Aantal &ldquo;Stuk/Problemen&rdquo;
+            Meldingen laatste 7 dagen
           </div>
-          <div className="text-xl font-semibold">
-            {outCount + issuesCount}
-          </div>
+          <div className="text-xl font-semibold">{last7dReports}</div>
         </div>
       </section>
 
-      {/* Simple bar "graph" */}
+      {/* Reports over time chart */}
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
-        <h2 className="text-base font-semibold">Statusverdeling</h2>
+        <h2 className="text-base font-semibold">
+          Meldingen afgelopen 30 dagen
+        </h2>
         {reports.length === 0 ? (
           <p className="text-xs text-gray-500">
             Er zijn nog geen meldingen voor deze machine.
           </p>
         ) : (
           <>
-            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full bg-emerald-500"
-                style={{ width: `${workingPct}%` }}
-              />
-              <div
-                className="h-full bg-red-400"
-                style={{
-                  width: `${problemPct}%`,
-                  marginLeft: `${workingPct}%`,
-                }}
-              />
+            <div className="w-full h-28 sm:h-32">
+              <svg
+                viewBox="0 0 120 40"
+                className="w-full h-full overflow-visible"
+                aria-hidden="true"
+              >
+                {/* Baseline */}
+                <line
+                  x1={0}
+                  x2={120}
+                  y1={36}
+                  y2={36}
+                  stroke="#e5e7eb"
+                  strokeWidth={0.5}
+                />
+                {buckets.map((b, idx) => {
+                  const total = b.working + b.problem;
+                  if (!total) return null;
+                  const barWidth = 120 / buckets.length;
+                  const x = idx * barWidth + barWidth * 0.15;
+                  const width = barWidth * 0.7;
+
+                  const maxHeight = 28;
+                  const workingHeight =
+                    (b.working / maxDailyTotal) * maxHeight;
+                  const problemHeight =
+                    (b.problem / maxDailyTotal) * maxHeight;
+
+                  const yWorking = 36 - workingHeight;
+                  const yProblem = yWorking - problemHeight;
+
+                  return (
+                    <g key={idx}>
+                      {/* Problems (bottom of bar) */}
+                      {problemHeight > 0 && (
+                        <rect
+                          x={x}
+                          y={yWorking}
+                          width={width}
+                          height={problemHeight}
+                          rx={1}
+                          fill="#f87171" // red-400
+                        />
+                      )}
+                      {/* Working (stacked above) */}
+                      {workingHeight > 0 && (
+                        <rect
+                          x={x}
+                          y={yProblem}
+                          width={width}
+                          height={workingHeight}
+                          rx={1}
+                          fill="#22c55e" // emerald-500
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
             </div>
-            <div className="flex justify-between text-[11px] text-gray-600">
-              <span>{workingPct}% meldingen &ldquo;Werkend&rdquo;</span>
-              <span>{problemPct}% meldingen met problemen</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-sm bg-emerald-500" />
+                  <span>Werkend</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-sm bg-red-400" />
+                  <span>Storing / problemen</span>
+                </span>
+              </div>
+              <span>
+                Bovenste dagen = recenter · hoogte = aantal meldingen
+              </span>
             </div>
           </>
         )}
       </section>
 
+      {/* Recent reports list */}
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
         <h2 className="text-base font-semibold">Recente meldingen</h2>
         {reports.length === 0 && (
@@ -368,7 +548,7 @@ export default function MachinePageClient() {
                       ? "⚠️"
                       : "❌"}
                   </span>
-                <div>
+                  <div>
                     <div className="font-medium text-xs">
                       {statusToLabel(r.status)}
                     </div>

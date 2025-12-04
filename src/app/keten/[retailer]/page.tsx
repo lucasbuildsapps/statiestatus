@@ -35,7 +35,7 @@ export default function RetailerPageClient() {
   const pathname = usePathname();
 
   const retailer = useMemo(() => {
-    const parts = pathname.split("/").filter(Boolean); // ["keten","<retailer>"]
+    const parts = pathname.split("/").filter(Boolean);
     const last = parts[parts.length - 1] || "";
     return last ? decodeURIComponent(last) : null;
   }, [pathname]);
@@ -201,16 +201,19 @@ export default function RetailerPageClient() {
 
   // Loaded
   const { retailer: retailerName, locations } = state;
-  const total = locations.length || 1;
+
   const workingCount = locations.filter(
     (l) => l.currentStatus === "WORKING"
   ).length;
   const problemCount = locations.filter(
     (l) => l.currentStatus === "OUT_OF_ORDER" || l.currentStatus === "ISSUES"
   ).length;
+  const unknownCount = locations.filter((l) => l.currentStatus === null).length;
 
-  const workingPct = Math.round((workingCount / total) * 100);
-  const problemPct = Math.round((problemCount / total) * 100);
+  const total = Math.max(locations.length, 1);
+  const workingShare = (workingCount / total) * 100;
+  const problemShare = (problemCount / total) * 100;
+  const unknownShare = Math.max(0, 100 - workingShare - problemShare);
 
   return (
     <main className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -267,7 +270,7 @@ export default function RetailerPageClient() {
         </div>
       </section>
 
-      {/* Simple bar graph */}
+      {/* Status distribution graph */}
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
         <h2 className="text-base font-semibold">Statusverdeling</h2>
         {locations.length === 0 ? (
@@ -276,24 +279,43 @@ export default function RetailerPageClient() {
           </p>
         ) : (
           <>
-            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div className="h-4 w-full rounded-full bg-gray-100 overflow-hidden">
               <div
                 className="h-full bg-emerald-500"
-                style={{ width: `${workingPct}%` }}
+                style={{ width: `${workingShare}%` }}
               />
               <div
                 className="h-full bg-red-400"
                 style={{
-                  width: `${problemPct}%`,
-                  marginLeft: `${workingPct}%`,
+                  width: `${problemShare}%`,
+                  marginLeft: `${workingShare}%`,
                 }}
               />
+              {unknownCount > 0 && (
+                <div
+                  className="h-full bg-gray-300"
+                  style={{
+                    width: `${unknownShare}%`,
+                    marginLeft: `${workingShare + problemShare}%`,
+                  }}
+                />
+              )}
             </div>
-            <div className="flex justify-between text-[11px] text-gray-600">
-              <span>{workingPct}% machines &ldquo;Werkend&rdquo;</span>
-              <span>
-                {problemPct}% machines met problemen / buiten gebruik
+            <div className="flex flex-wrap gap-3 text-[11px] text-gray-600">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm bg-emerald-500" />
+                <span>{workingCount} werkend</span>
               </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm bg-red-400" />
+                <span>{problemCount} storing of problemen</span>
+              </span>
+              {unknownCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-sm bg-gray-300" />
+                  <span>{unknownCount} onbekend</span>
+                </span>
+              )}
             </div>
           </>
         )}

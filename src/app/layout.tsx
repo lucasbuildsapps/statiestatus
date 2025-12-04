@@ -15,12 +15,44 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "statiestatus.nl",
+  applicationName: "Statiestatus",
   description: "Check en rapporteer de status van statiegeldmachines.",
+  // All favicon / touch icons
   icons: {
-    icon: "/icon.svg",
+    // Browser tab / address bar
+    icon: [
+      {
+        url: "/favicon-96x96.png",
+        type: "image/png",
+        sizes: "96x96",
+      },
+      {
+        url: "/favicon.svg",
+        type: "image/svg+xml",
+      },
+      {
+        url: "/favicon.ico",
+        type: "image/x-icon",
+      },
+    ],
+    // iOS home-screen icon
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
   },
-  manifest: "/manifest.webmanifest",
+  // Use the manifest that came from RealFaviconGenerator
+  manifest: "/site.webmanifest",
+  // This also influences how some platforms color the address bar / tile
   themeColor: "#16a34a",
+  // Extra Apple PWA metadata (includes apple-mobile-web-app-title)
+  appleWebApp: {
+    capable: true,
+    title: "Statiestatus",
+  },
 };
 
 export default function RootLayout({

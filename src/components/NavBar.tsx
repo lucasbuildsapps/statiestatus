@@ -9,7 +9,6 @@ const navItems = [
   { href: "#kaart", label: "Kaart", type: "anchor" as const },
   { href: "#nearby", label: "In de buurt", type: "anchor" as const },
   { href: "/over", label: "Over", type: "link" as const },
-  { href: "/stats", label: "Stats", type: "link" as const },
   { href: "/reports", label: "Snel melden", type: "link" as const },
   { href: "/contact", label: "Contact", type: "link" as const },
 ];
