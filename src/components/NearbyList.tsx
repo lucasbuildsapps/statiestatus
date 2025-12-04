@@ -57,7 +57,7 @@ function distanceKm(
 
 export default function NearbyList() {
   const [locations, setLocations] = useState<LocationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingLocations, setLoadingLocations] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -93,7 +93,7 @@ export default function NearbyList() {
     let cancelled = false;
     (async () => {
       try {
-        setLoading(true);
+        setLoadingLocations(true);
         const data = await fetchLocationsShared(false);
         if (!cancelled) {
           setLocations(data);
@@ -106,7 +106,7 @@ export default function NearbyList() {
           setLocations([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingLocations(false);
       }
     })();
     return () => {
@@ -144,7 +144,6 @@ export default function NearbyList() {
     );
   }, []);
 
-  // Enrich with distance
   const enriched: LocationWithDistance[] = useMemo(
     () =>
       locations.map((l) => ({
@@ -160,6 +159,10 @@ export default function NearbyList() {
   );
 
   const nearbyLocations: LocationWithDistance[] = useMemo(() => {
+    // Only compute “in de buurt” once we either have a location,
+    // or we know we *won’t* get one (geoError).
+    if (!locationResolved && !geoError) return [];
+
     const sorted = [...enriched];
     sorted.sort((a, b) => {
       const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
@@ -170,7 +173,7 @@ export default function NearbyList() {
     });
 
     return sorted.slice(0, 5);
-  }, [enriched]);
+  }, [enriched, locationResolved, geoError]);
 
   function formatDistance(d: number | null) {
     if (d == null || !isFinite(d)) return "Afstand onbekend";
@@ -207,14 +210,16 @@ export default function NearbyList() {
   }
 
   const hasRealLocation = !!pos && !geoError;
-  const showNearbyList = (locationResolved || geoError) && nearbyLocations.length > 0;
+  const isStillResolvingLocation = !locationResolved && !geoError;
 
   return (
     <section className="space-y-4 text-sm">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">In de buurt</h2>
-        {loading && <span className="text-xs text-gray-400">Laden…</span>}
-        {!loading && (
+        {loadingLocations && (
+          <span className="text-xs text-gray-400">Locaties laden…</span>
+        )}
+        {!loadingLocations && (
           <span className="text-xs text-gray-400">
             {locations.length} locaties
           </span>
@@ -295,11 +300,15 @@ export default function NearbyList() {
                       disabled={submittingId === keyWorking}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
-                      {submittingId === keyWorking ? "Bezig…" : "✅ Werkt nu"}
+                      {submittingId === keyWorking
+                        ? "Bezig…"
+                        : "✅ Werkt nu"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => quickReport(l.id, "OUT_OF_ORDER")}
+                      onClick={() =>
+                        quickReport(l.id, "OUT_OF_ORDER")
+                      }
                       disabled={submittingId === keyOut}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
@@ -335,7 +344,7 @@ export default function NearbyList() {
           {hasRealLocation && <span>Gebaseerd op jouw locatie</span>}
         </div>
 
-        {!locationResolved && !geoError && (
+        {isStillResolvingLocation && (
           <p className="text-xs text-gray-500">
             We bepalen je locatie om machines in de buurt te tonen…
           </p>
@@ -343,12 +352,20 @@ export default function NearbyList() {
 
         {geoError && (
           <p className="text-xs text-gray-500">
-            We hebben geen toegang tot je locatie. We tonen een algemene lijst
-            met locaties; gebruik de kaart voor exacte posities.
+            We hebben geen toegang tot je locatie. We tonen een algemene
+            lijst met locaties; gebruik de kaart voor exacte posities.
           </p>
         )}
 
-        {showNearbyList && (
+        {nearbyLocations.length === 0 &&
+          !loadingLocations &&
+          !isStillResolvingLocation && (
+            <p className="text-xs text-gray-500">
+              Geen locaties gevonden. Probeer de kaart hierboven.
+            </p>
+          )}
+
+        {nearbyLocations.length > 0 && (
           <ul className="space-y-2">
             {nearbyLocations.map((l) => (
               <li
@@ -405,12 +422,6 @@ export default function NearbyList() {
               </li>
             ))}
           </ul>
-        )}
-
-        {locationResolved && !geoError && nearbyLocations.length === 0 && !loading && (
-          <p className="text-xs text-gray-500">
-            Geen locaties gevonden. Probeer de kaart hierboven.
-          </p>
         )}
       </div>
     </section>

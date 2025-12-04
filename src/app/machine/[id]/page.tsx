@@ -218,15 +218,17 @@ export default function MachinePageClient() {
     );
   }
 
-  // Loaded
-  const location = state.location;
+  const { location } = state;
   const reports = location.reports;
   const lastReport = reports[0] ?? null;
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
-  const totalReports = reports.length;
+  const totalReports = reports.length || 1; // avoid division by zero
   const statusLabel = statusToLabel(location.currentStatus);
+
+  const workingPct = Math.round((workingCount / totalReports) * 100);
+  const problemPct = Math.round(((outCount + issuesCount) / totalReports) * 100);
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -288,13 +290,14 @@ export default function MachinePageClient() {
         </div>
       </section>
 
+      {/* Stats cards */}
       <section className="grid sm:grid-cols-3 gap-3 text-sm">
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
             Totaal aantal meldingen
           </div>
           <div className="text-2xl font-semibold">
-            {totalReports || "–"}
+            {reports.length || "–"}
           </div>
         </div>
         <div className="rounded-2xl border bg-white p-3">
@@ -311,6 +314,36 @@ export default function MachinePageClient() {
             {outCount + issuesCount}
           </div>
         </div>
+      </section>
+
+      {/* Simple bar "graph" */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">Statusverdeling</h2>
+        {reports.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Er zijn nog geen meldingen voor deze machine.
+          </p>
+        ) : (
+          <>
+            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${workingPct}%` }}
+              />
+              <div
+                className="h-full bg-red-400"
+                style={{
+                  width: `${problemPct}%`,
+                  marginLeft: `${workingPct}%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-gray-600">
+              <span>{workingPct}% meldingen &ldquo;Werkend&rdquo;</span>
+              <span>{problemPct}% meldingen met problemen</span>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
@@ -335,14 +368,12 @@ export default function MachinePageClient() {
                       ? "⚠️"
                       : "❌"}
                   </span>
-                  <div>
+                <div>
                     <div className="font-medium text-xs">
                       {statusToLabel(r.status)}
                     </div>
                     {r.note && (
-                      <div className="text-xs text-gray-700">
-                        {r.note}
-                      </div>
+                      <div className="text-xs text-gray-700">{r.note}</div>
                     )}
                   </div>
                 </div>
