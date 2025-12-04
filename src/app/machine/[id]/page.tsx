@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { deriveStatus } from "@/lib/derive";
-import { Status } from "@prisma/client";
+import type { Status } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ type Props = {
   params: { id?: string };
 };
 
-function decodeParam(value: string | undefined): string | null {
+function safeDecode(value: string | undefined): string | null {
   if (!value) return null;
   try {
     return decodeURIComponent(value);
@@ -21,12 +21,11 @@ function decodeParam(value: string | undefined): string | null {
 }
 
 async function loadLocation(idParam: string | undefined) {
-  try {
-    const decodedId = decodeParam(idParam);
-    if (!decodedId) return null;
+  const decodedId = safeDecode(idParam);
+  if (!decodedId) return { location: null, error: "Geen ID in URL." };
 
-    // IMPORTANT: use findFirst instead of findUnique to avoid schema issues
-    const location = await prisma.location.findFirst({
+  try {
+    const location = await prisma.location.findUnique({
       where: { id: decodedId },
       include: {
         reports: {
@@ -36,22 +35,27 @@ async function loadLocation(idParam: string | undefined) {
       },
     });
 
-    if (!location) return null;
+    if (!location) {
+      return {
+        location: null,
+        error: `Geen locatie gevonden met ID ${decodedId}`,
+      };
+    }
 
     const currentStatus = deriveStatus(location.reports);
-
-    return { location, currentStatus };
-  } catch (err) {
-    console.error("Error loading machine detail page:", err);
-    return null;
+    return { location, currentStatus, error: null as string | null };
+  } catch (e) {
+    console.error("Error loading machine detail page:", e);
+    return {
+      location: null,
+      error: "Prisma-fout bij het ophalen van de locatie. Zie server logs.",
+    };
   }
 }
 
 export async function generateMetadata(_props: Props): Promise<Metadata> {
-  const baseTitle = "Statiegeldmachine – statiestatus.nl";
-
   return {
-    title: baseTitle,
+    title: "Statiegeldmachine – statiestatus.nl",
     description:
       "Bekijk meldingen en status van deze statiegeldmachine op statiestatus.nl.",
   };
@@ -90,9 +94,50 @@ function timeAgo(iso?: Date | string | null) {
 
 export default async function MachinePage({ params }: Props) {
   const rawId = params?.id;
-  const data = await loadLocation(rawId);
+  const { location, currentStatus, error } = await loadLocation(rawId);
 
-  if (!data) {
+  // JSON-LD only if we have a location
+  const jsonLd =
+    location &&
+    (() => {
+      const statusLabel = statusToLabel(currentStatus ?? null);
+      const totalReports = location.reports.length;
+      return {
+        "@context": "https://schema.org",
+        "@type": "Place",
+        name: location.name,
+        address: {
+          "@type": "PostalAddress",
+          streetAddress: location.address,
+          addressLocality: location.city,
+          addressCountry: "NL",
+        },
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: location.lat,
+          longitude: location.lng,
+        },
+        additionalProperty: [
+          {
+            "@type": "PropertyValue",
+            name: "retailer",
+            value: location.retailer,
+          },
+          {
+            "@type": "PropertyValue",
+            name: "currentStatus",
+            value: statusLabel,
+          },
+          {
+            "@type": "PropertyValue",
+            name: "totalReports",
+            value: totalReports,
+          },
+        ],
+      };
+    })();
+
+  if (!location) {
     return (
       <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4">
         <p className="text-xs text-gray-500">
@@ -108,12 +153,17 @@ export default async function MachinePage({ params }: Props) {
           We konden deze statiegeldmachine niet vinden. Mogelijk is de link
           verouderd of is de locatie verwijderd.
         </p>
+
         {rawId && (
           <p className="text-[11px] text-gray-400">
             Gevraagde locatie-ID:{" "}
-            <code className="px-1 py-0.5 rounded bg-gray-100">
-              {rawId}
-            </code>
+            <code className="px-1 py-0.5 rounded bg-gray-100">{rawId}</code>
+          </p>
+        )}
+
+        {error && (
+          <p className="text-[11px] text-red-500">
+            Debug-info: <code className="bg-red-50 px-1 py-0.5 rounded">{error}</code>
           </p>
         )}
 
@@ -135,57 +185,23 @@ export default async function MachinePage({ params }: Props) {
     );
   }
 
-  const { location, currentStatus } = data;
-  const { reports } = location;
-
+  const reports = location.reports;
   const lastReport = reports[0] ?? null;
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
 
   const totalReports = reports.length;
-  const statusLabel = statusToLabel(currentStatus);
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Place",
-    name: location.name,
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: location.address,
-      addressLocality: location.city,
-      addressCountry: "NL",
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: location.lat,
-      longitude: location.lng,
-    },
-    additionalProperty: [
-      {
-        "@type": "PropertyValue",
-        name: "retailer",
-        value: location.retailer,
-      },
-      {
-        "@type": "PropertyValue",
-        name: "currentStatus",
-        value: statusLabel,
-      },
-      {
-        "@type": "PropertyValue",
-        name: "totalReports",
-        value: totalReports,
-      },
-    ],
-  };
+  const statusLabel = statusToLabel(currentStatus ?? null);
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
 
       <section className="space-y-3">
         <p className="text-xs text-gray-500">
@@ -210,7 +226,7 @@ export default async function MachinePage({ params }: Props) {
           <span
             className={
               "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium " +
-              statusToColorClasses(currentStatus)
+              statusToColorClasses(currentStatus ?? null)
             }
           >
             <span>Huidige inschatting:</span>
