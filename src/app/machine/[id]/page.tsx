@@ -66,6 +66,45 @@ function statusToColorClasses(status: ApiStatus | null) {
   return "bg-gray-100 text-gray-800 border-gray-200";
 }
 
+// ---------- Confidence helpers (frontend-only for now) ----------
+
+type Confidence = "low" | "medium" | "high";
+
+function deriveConfidence(reports: ApiReport[]): Confidence {
+  if (!reports.length) return "low";
+
+  const now = Date.now();
+  let last24h = 0;
+  let last7d = 0;
+
+  for (const r of reports) {
+    const ageMs = now - new Date(r.createdAt).getTime();
+    if (ageMs <= 24 * 3600 * 1000) last24h++;
+    if (ageMs <= 7 * 24 * 3600 * 1000) last7d++;
+  }
+
+  const total = reports.length;
+
+  // Tune these thresholds as you like
+  if (last24h >= 3 || last7d >= 5 || total >= 20) return "high";
+  if (last24h >= 1 || last7d >= 2 || total >= 5) return "medium";
+  return "low";
+}
+
+function confidenceLabel(c: Confidence) {
+  if (c === "high") return "Hoge betrouwbaarheid";
+  if (c === "medium") return "Redelijke betrouwbaarheid";
+  return "Lage betrouwbaarheid";
+}
+
+function confidenceClasses(c: Confidence) {
+  if (c === "high") return "bg-emerald-100 text-emerald-900 border-emerald-200";
+  if (c === "medium") return "bg-amber-100 text-amber-900 border-amber-200";
+  return "bg-gray-100 text-gray-800 border-gray-200";
+}
+
+// ---------- Page component ----------
+
 export default function MachinePageClient() {
   const pathname = usePathname();
   const id = useMemo(() => {
@@ -221,6 +260,7 @@ export default function MachinePageClient() {
   const { location } = state;
   const reports = location.reports;
   const lastReport = reports[0] ?? null;
+
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
@@ -228,7 +268,11 @@ export default function MachinePageClient() {
   const statusLabel = statusToLabel(location.currentStatus);
 
   const workingPct = Math.round((workingCount / totalReports) * 100);
-  const problemPct = Math.round(((outCount + issuesCount) / totalReports) * 100);
+  const problemPct = Math.round(
+    ((outCount + issuesCount) / totalReports) * 100
+  );
+
+  const confidence = deriveConfidence(reports);
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
@@ -258,9 +302,19 @@ export default function MachinePageClient() {
               statusToColorClasses(location.currentStatus)
             }
           >
-            <span>Huidige inschatting:</span>
+            <span>Huidige status:</span>
             <span>{statusLabel}</span>
           </span>
+
+          <span
+            className={
+              "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] " +
+              confidenceClasses(confidence)
+            }
+          >
+            {confidenceLabel(confidence)}
+          </span>
+
           {lastReport && (
             <span className="text-xs text-gray-500">
               Laatste melding: {timeAgo(lastReport.createdAt)}
@@ -368,7 +422,7 @@ export default function MachinePageClient() {
                       ? "⚠️"
                       : "❌"}
                   </span>
-                <div>
+                  <div>
                     <div className="font-medium text-xs">
                       {statusToLabel(r.status)}
                     </div>

@@ -503,40 +503,33 @@ export default function MapView() {
                 }}
               >
                 <Popup>
-                  <div className="space-y-3 text-sm">
+                  <div className="w-64 space-y-3 text-sm">
                     {/* Header */}
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-semibold text-base">
+                        <div className="font-semibold leading-tight">
                           {l.name}
                         </div>
-                        <div className="text-gray-700">{l.retailer}</div>
-                        <div className="text-gray-600 text-xs">
-                          {l.address}, {l.city}
+                        <div className="text-xs text-gray-600">
+                          {l.retailer} • {l.city}
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          {l.address}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1 items-end">
-                        <button
-                          type="button"
-                          onClick={() => toggleFavorite(l.id)}
-                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                        >
-                          {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => shareLocation(l)}
-                          className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                        >
-                          Deel link
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(l.id)}
+                        className="text-[11px] px-2 py-1 rounded border bg-white hover:bg-gray-50"
+                      >
+                        {isFavorite(l.id) ? "★" : "☆"}
+                      </button>
                     </div>
 
-                    {/* Status row */}
-                    <div className="flex items-center justify-between gap-2">
+                    {/* Status + reliability */}
+                    <div className="flex items-start justify-between gap-2">
                       <StatusBadge status={l.currentStatus} />
-                      <div className="text-xs text-gray-500 text-right">
+                      <div className="text-[11px] text-gray-500 text-right">
                         {l.lastReportAt ? (
                           <>
                             Laatste melding {timeAgo(l.lastReportAt)}
@@ -550,63 +543,28 @@ export default function MapView() {
                       </div>
                     </div>
 
-                    {/* Links to detail / city / retailer pages */}
-                    <div className="flex flex-wrap gap-2 text-[11px] pt-1">
+                    {/* Actions */}
+                    <div className="flex flex-col gap-1 pt-1">
                       <Link
                         href={`/machine/${l.id}`}
-                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                        className="w-full rounded-lg bg-black text-white text-xs px-3 py-1.5 text-center hover:bg-gray-900"
                       >
-                        Details pagina
+                        Details & geschiedenis
                       </Link>
                       <Link
-                        href={`/stad/${encodeURIComponent(l.city)}`}
-                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                        href={`/melden?location=${encodeURIComponent(l.id)}`}
+                        className="w-full rounded-lg border text-xs px-3 py-1.5 text-center hover:bg-gray-50"
                       >
-                        Meer in {l.city}
+                        Melding plaatsen
                       </Link>
-                      <Link
-                        href={`/keten/${encodeURIComponent(l.retailer)}`}
-                        className="px-2 py-1 rounded-lg border bg-gray-50 hover:bg-gray-100"
+                      <button
+                        type="button"
+                        onClick={() => shareLocation(l)}
+                        className="w-full rounded-lg border text-xs px-3 py-1.5 text-center hover:bg-gray-50"
                       >
-                        Alle bij {l.retailer}
-                      </Link>
+                        Deel link
+                      </button>
                     </div>
-
-                    {/* Recent reports */}
-                    {l.lastReports && l.lastReports.length > 0 && (
-                      <div className="rounded-lg border p-2 text-xs space-y-1 bg-white/60">
-                        <div className="font-medium">Recente meldingen</div>
-                        <ul className="space-y-1">
-                          {l.lastReports.map((r) => (
-                            <li
-                              key={r.id}
-                              className="flex items-start gap-2"
-                            >
-                              <span className="shrink-0 mt-0.5">
-                                <StatusDot status={r.status} />
-                              </span>
-                              <span className="text-gray-700">
-                                <b>{statusLabel(r.status)}</b>
-                                {r.note ? ` — ${r.note}` : ""}
-                                <span className="text-gray-500">
-                                  {" "}
-                                  · {timeAgo(r.createdAt)}
-                                </span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Report form */}
-                    <ReportForm
-                      locationId={l.id}
-                      onSuccess={async () => {
-                        await loadLocations(true);
-                        showToast("✅ Bedankt! Melding geplaatst.");
-                      }}
-                    />
                   </div>
                 </Popup>
               </CircleMarker>
@@ -651,26 +609,6 @@ function StatusBadge({
   );
 }
 
-function StatusDot({
-  status,
-}: {
-  status: ApiStatus;
-}) {
-  const color = colorForStatus(status);
-  return (
-    <span
-      className="inline-block rounded-full"
-      style={{
-        width: 8,
-        height: 8,
-        background: color,
-        boxShadow: "0 0 0 2px #ffffff",
-      }}
-      aria-hidden
-    />
-  );
-}
-
 function Legend() {
   const items: Array<{ label: string; color: string }> = [
     { label: "Werkend", color: colorForStatus("WORKING") },
@@ -700,7 +638,7 @@ function Legend() {
   );
 }
 
-/* ---------- Popup report form ---------- */
+/* ---------- Popup report form (still available if you want it later) ---------- */
 
 type ReportIssueType = "FULL" | "RECEIPT" | "NO_ACCEPT" | "DOWN" | "OTHER";
 
@@ -731,9 +669,7 @@ function ReportForm({
     setMsg(null);
 
     const reason =
-      status === "OUT_OF_ORDER" && issueType
-        ? ISSUE_LABELS[issueType]
-        : "";
+      status === "OUT_OF_ORDER" && issueType ? ISSUE_LABELS[issueType] : "";
 
     const pieces: string[] = [];
     if (reason) pieces.push(reason);
@@ -766,7 +702,6 @@ function ReportForm({
 
   return (
     <form onSubmit={submit} className="space-y-2 text-sm">
-      {/* Status select */}
       <select
         value={status}
         onChange={(e) => {
@@ -782,7 +717,6 @@ function ReportForm({
         <option value="OUT_OF_ORDER">❌ Stuk</option>
       </select>
 
-      {/* Reason chips when stuk */}
       {status === "OUT_OF_ORDER" && (
         <div className="space-y-1">
           <div className="text-xs text-gray-600">
@@ -819,7 +753,6 @@ function ReportForm({
         </div>
       )}
 
-      {/* Note */}
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
