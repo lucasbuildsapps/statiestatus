@@ -1,80 +1,41 @@
 // src/app/machine/[id]/page.tsx
-import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
-import { deriveStatus } from "@/lib/derive";
-import { Status } from "@prisma/client";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
-type Props = {
-  params: { id?: string };
+type ApiStatus = "WORKING" | "ISSUES" | "OUT_OF_ORDER";
+
+type ApiReport = {
+  id: string;
+  status: ApiStatus;
+  note: string | null;
+  createdAt: string;
 };
 
-function decodeParam(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
+type ApiLocation = {
+  id: string;
+  name: string;
+  retailer: string;
+  lat: number;
+  lng: number;
+  address: string;
+  city: string;
+  createdAt: string;
+  currentStatus: ApiStatus | null;
+  reports: ApiReport[];
+};
 
-async function loadLocation(idParam: string | undefined) {
-  try {
-    const decodedId = decodeParam(idParam);
-    if (!decodedId) return null;
+type LoadState =
+  | { type: "idle" }
+  | { type: "loading" }
+  | { type: "error"; message: string }
+  | { type: "not-found" }
+  | { type: "loaded"; location: ApiLocation };
 
-    // IMPORTANT: use findFirst instead of findUnique to avoid schema issues
-    const location = await prisma.location.findFirst({
-      where: { id: decodedId },
-      include: {
-        reports: {
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        },
-      },
-    });
-
-    if (!location) return null;
-
-    const currentStatus = deriveStatus(location.reports);
-
-    return { location, currentStatus };
-  } catch (err) {
-    console.error("Error loading machine detail page:", err);
-    return null;
-  }
-}
-
-export async function generateMetadata(_props: Props): Promise<Metadata> {
-  const baseTitle = "Statiegeldmachine – statiestatus.nl";
-
-  return {
-    title: baseTitle,
-    description:
-      "Bekijk meldingen en status van deze statiegeldmachine op statiestatus.nl.",
-  };
-}
-
-function statusToLabel(status: Status | null) {
-  if (status === "WORKING") return "Werkend";
-  if (status === "ISSUES") return "Problemen";
-  if (status === "OUT_OF_ORDER") return "Stuk";
-  return "Onbekend";
-}
-
-function statusToColorClasses(status: Status | null) {
-  if (status === "WORKING")
-    return "bg-emerald-100 text-emerald-900 border-emerald-200";
-  if (status === "ISSUES")
-    return "bg-amber-100 text-amber-900 border-amber-200";
-  if (status === "OUT_OF_ORDER")
-    return "bg-red-100 text-red-900 border-red-200";
-  return "bg-gray-100 text-gray-800 border-gray-200";
-}
-
-function timeAgo(iso?: Date | string | null) {
+function timeAgo(iso?: string | null) {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
   const now = Date.now();
@@ -88,13 +49,86 @@ function timeAgo(iso?: Date | string | null) {
   return `${d}d geleden`;
 }
 
-export default async function MachinePage({ params }: Props) {
-  const rawId = params?.id;
-  const data = await loadLocation(rawId);
+function statusToLabel(status: ApiStatus | null) {
+  if (status === "WORKING") return "Werkend";
+  if (status === "ISSUES") return "Problemen";
+  if (status === "OUT_OF_ORDER") return "Stuk";
+  return "Onbekend";
+}
 
-  if (!data) {
+function statusToColorClasses(status: ApiStatus | null) {
+  if (status === "WORKING")
+    return "bg-emerald-100 text-emerald-900 border-emerald-200";
+  if (status === "ISSUES")
+    return "bg-amber-100 text-amber-900 border-amber-200";
+  if (status === "OUT_OF_ORDER")
+    return "bg-red-100 text-red-900 border-red-200";
+  return "bg-gray-100 text-gray-800 border-gray-200";
+}
+
+export default function MachinePageClient() {
+  const pathname = usePathname();
+  const id = useMemo(() => {
+    const parts = pathname.split("/").filter(Boolean);
+    return parts[parts.length - 1] || null;
+  }, [pathname]);
+
+  const [state, setState] = useState<LoadState>({ type: "idle" });
+
+  useEffect(() => {
+    if (!id) {
+      setState({
+        type: "error",
+        message: "Geen ID in URL gevonden.",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ type: "loading" });
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/machine/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          if (res.status === 404) {
+            if (!cancelled) setState({ type: "not-found" });
+            return;
+          }
+          const data = await res.json().catch(() => null);
+          const msg =
+            (data as any)?.error ||
+            `Er ging iets mis bij het laden (status ${res.status}).`;
+          if (!cancelled) setState({ type: "error", message: msg });
+          return;
+        }
+
+        const data = (await res.json()) as { location: ApiLocation };
+        if (!cancelled) {
+          setState({ type: "loaded", location: data.location });
+        }
+      } catch (e) {
+        console.error("Error fetching machine:", e);
+        if (!cancelled) {
+          setState({
+            type: "error",
+            message: "Netwerkfout bij het ophalen van de locatie.",
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (state.type === "idle" || state.type === "loading") {
     return (
-      <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4 text-sm">
         <p className="text-xs text-gray-500">
           <a href="/" className="hover:underline">
             statiestatus.nl
@@ -102,21 +136,30 @@ export default async function MachinePage({ params }: Props) {
           · Locatie detail
         </p>
         <h1 className="text-2xl font-semibold text-slate-900">
-          Locatie niet gevonden
+          Locatie laden…
         </h1>
         <p className="text-sm text-gray-600">
-          We konden deze statiegeldmachine niet vinden. Mogelijk is de link
-          verouderd of is de locatie verwijderd.
+          We halen de gegevens van deze statiegeldmachine op.
         </p>
-        {rawId && (
-          <p className="text-[11px] text-gray-400">
-            Gevraagde locatie-ID:{" "}
-            <code className="px-1 py-0.5 rounded bg-gray-100">
-              {rawId}
-            </code>
-          </p>
-        )}
+      </main>
+    );
+  }
 
+  if (state.type === "error") {
+    return (
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4 text-sm">
+        <p className="text-xs text-gray-500">
+          <a href="/" className="hover:underline">
+            statiestatus.nl
+          </a>{" "}
+          · Locatie detail
+        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Er ging iets mis
+        </h1>
+        <p className="text-sm text-gray-600">
+          {state.message || "De gegevens konden niet worden opgehaald."}
+        </p>
         <div className="flex flex-wrap gap-2 text-xs pt-2">
           <a
             href="/#kaart"
@@ -135,58 +178,60 @@ export default async function MachinePage({ params }: Props) {
     );
   }
 
-  const { location, currentStatus } = data;
-  const { reports } = location;
+  if (state.type === "not-found") {
+    return (
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-8 space-y-4 text-sm">
+        <p className="text-xs text-gray-500">
+          <a href="/" className="hover:underline">
+            statiestatus.nl
+          </a>{" "}
+          · Locatie detail
+        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Locatie niet gevonden
+        </h1>
+        <p className="text-sm text-gray-600">
+          We konden deze statiegeldmachine niet vinden. Mogelijk is de link
+          verouderd of is de locatie verwijderd.
+        </p>
+        {id && (
+          <p className="text-[11px] text-gray-400">
+            Gevraagde locatie-ID:{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100">{id}</code>
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2 text-xs pt-2">
+          <a
+            href="/#kaart"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            ← Terug naar kaart
+          </a>
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100"
+          >
+            Naar startpagina
+          </a>
+        </div>
+      </main>
+    );
+  }
 
+  const { location } = state;
+  const reports = location.reports;
   const lastReport = reports[0] ?? null;
   const workingCount = reports.filter((r) => r.status === "WORKING").length;
   const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
   const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
+  const totalReports = reports.length || 1; // avoid division by zero
+  const statusLabel = statusToLabel(location.currentStatus);
 
-  const totalReports = reports.length;
-  const statusLabel = statusToLabel(currentStatus);
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Place",
-    name: location.name,
-    address: {
-      "@type": "PostalAddress",
-      streetAddress: location.address,
-      addressLocality: location.city,
-      addressCountry: "NL",
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: location.lat,
-      longitude: location.lng,
-    },
-    additionalProperty: [
-      {
-        "@type": "PropertyValue",
-        name: "retailer",
-        value: location.retailer,
-      },
-      {
-        "@type": "PropertyValue",
-        name: "currentStatus",
-        value: statusLabel,
-      },
-      {
-        "@type": "PropertyValue",
-        name: "totalReports",
-        value: totalReports,
-      },
-    ],
-  };
+  const workingPct = Math.round((workingCount / totalReports) * 100);
+  const problemPct = Math.round(((outCount + issuesCount) / totalReports) * 100);
 
   return (
     <main className="max-w-3xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 space-y-6">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-
       <section className="space-y-3">
         <p className="text-xs text-gray-500">
           <a href="/" className="hover:underline">
@@ -210,7 +255,7 @@ export default async function MachinePage({ params }: Props) {
           <span
             className={
               "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium " +
-              statusToColorClasses(currentStatus)
+              statusToColorClasses(location.currentStatus)
             }
           >
             <span>Huidige inschatting:</span>
@@ -245,13 +290,14 @@ export default async function MachinePage({ params }: Props) {
         </div>
       </section>
 
+      {/* Stats cards */}
       <section className="grid sm:grid-cols-3 gap-3 text-sm">
         <div className="rounded-2xl border bg-white p-3">
           <div className="text-[11px] text-gray-500 mb-1">
             Totaal aantal meldingen
           </div>
           <div className="text-2xl font-semibold">
-            {totalReports || "–"}
+            {reports.length || "–"}
           </div>
         </div>
         <div className="rounded-2xl border bg-white p-3">
@@ -268,6 +314,36 @@ export default async function MachinePage({ params }: Props) {
             {outCount + issuesCount}
           </div>
         </div>
+      </section>
+
+      {/* Simple bar "graph" */}
+      <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
+        <h2 className="text-base font-semibold">Statusverdeling</h2>
+        {reports.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Er zijn nog geen meldingen voor deze machine.
+          </p>
+        ) : (
+          <>
+            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${workingPct}%` }}
+              />
+              <div
+                className="h-full bg-red-400"
+                style={{
+                  width: `${problemPct}%`,
+                  marginLeft: `${workingPct}%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-gray-600">
+              <span>{workingPct}% meldingen &ldquo;Werkend&rdquo;</span>
+              <span>{problemPct}% meldingen met problemen</span>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
@@ -292,14 +368,12 @@ export default async function MachinePage({ params }: Props) {
                       ? "⚠️"
                       : "❌"}
                   </span>
-                  <div>
+                <div>
                     <div className="font-medium text-xs">
                       {statusToLabel(r.status)}
                     </div>
                     {r.note && (
-                      <div className="text-xs text-gray-700">
-                        {r.note}
-                      </div>
+                      <div className="text-xs text-gray-700">{r.note}</div>
                     )}
                   </div>
                 </div>
