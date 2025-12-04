@@ -195,9 +195,7 @@ export default function NearbyList() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessage(
-          data?.error || "Er ging iets mis bij het verzenden."
-        );
+        setMessage(data?.error || "Er ging iets mis bij het verzenden.");
         return;
       }
       setMessage("✅ Bedankt! Snelmelding geplaatst.");
@@ -209,14 +207,13 @@ export default function NearbyList() {
   }
 
   const hasRealLocation = !!pos && !geoError;
+  const showNearbyList = (locationResolved || geoError) && nearbyLocations.length > 0;
 
   return (
     <section className="space-y-4 text-sm">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">In de buurt</h2>
-        {loading && (
-          <span className="text-xs text-gray-400">Laden…</span>
-        )}
+        {loading && <span className="text-xs text-gray-400">Laden…</span>}
         {!loading && (
           <span className="text-xs text-gray-400">
             {locations.length} locaties
@@ -246,7 +243,7 @@ export default function NearbyList() {
           <ul className="space-y-2">
             {favoriteLocations.map((l) => {
               const keyWorking = `${l.id}-WORKING`;
-              const keyOut = `${l.id}-OUT_OF_ORDER`;
+              const keyOut = `${l.id}-OUT`;
 
               return (
                 <li
@@ -298,15 +295,11 @@ export default function NearbyList() {
                       disabled={submittingId === keyWorking}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
-                      {submittingId === keyWorking
-                        ? "Bezig…"
-                        : "✅ Werkt nu"}
+                      {submittingId === keyWorking ? "Bezig…" : "✅ Werkt nu"}
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        quickReport(l.id, "OUT_OF_ORDER")
-                      }
+                      onClick={() => quickReport(l.id, "OUT_OF_ORDER")}
                       disabled={submittingId === keyOut}
                       className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
@@ -342,7 +335,7 @@ export default function NearbyList() {
           {hasRealLocation && <span>Gebaseerd op jouw locatie</span>}
         </div>
 
-        {!locationResolved && (
+        {!locationResolved && !geoError && (
           <p className="text-xs text-gray-500">
             We bepalen je locatie om machines in de buurt te tonen…
           </p>
@@ -350,18 +343,12 @@ export default function NearbyList() {
 
         {geoError && (
           <p className="text-xs text-gray-500">
-            We hebben geen toegang tot je locatie. We tonen een algemene
-            lijst met locaties; gebruik de kaart voor exacte posities.
+            We hebben geen toegang tot je locatie. We tonen een algemene lijst
+            met locaties; gebruik de kaart voor exacte posities.
           </p>
         )}
 
-        {nearbyLocations.length === 0 && !loading && (
-          <p className="text-xs text-gray-500">
-            Geen locaties gevonden. Probeer de kaart hierboven.
-          </p>
-        )}
-
-        {nearbyLocations.length > 0 && (
+        {showNearbyList && (
           <ul className="space-y-2">
             {nearbyLocations.map((l) => (
               <li
@@ -418,6 +405,12 @@ export default function NearbyList() {
               </li>
             ))}
           </ul>
+        )}
+
+        {locationResolved && !geoError && nearbyLocations.length === 0 && !loading && (
+          <p className="text-xs text-gray-500">
+            Geen locaties gevonden. Probeer de kaart hierboven.
+          </p>
         )}
       </div>
     </section>
