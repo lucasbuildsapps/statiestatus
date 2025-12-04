@@ -7,8 +7,12 @@ import type { Status } from "@prisma/client";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type Params = {
+  [key: string]: string | string[] | undefined;
+};
+
 type Props = {
-  params: { id?: string };
+  params: Params;
 };
 
 function safeDecode(value: string | undefined): string | null {
@@ -20,9 +24,37 @@ function safeDecode(value: string | undefined): string | null {
   }
 }
 
-async function loadLocation(idParam: string | undefined) {
-  const decodedId = safeDecode(idParam);
-  if (!decodedId) return { location: null, error: "Geen ID in URL." };
+/**
+ * Try to get an ID from different possible param shapes
+ * - /machine/[id]            -> params.id
+ * - /machine/[...slug]       -> params.slug[0]
+ * - weird rewrites           -> maybe something else later
+ */
+function extractId(params: Params | undefined): string | null {
+  if (!params) return null;
+
+  // 1) normal dynamic route: [id]
+  const direct = params.id;
+  if (typeof direct === "string") return direct;
+
+  // 2) catch-all: [...slug]
+  const slug = params.slug;
+  if (typeof slug === "string") return slug;
+  if (Array.isArray(slug) && slug.length > 0 && typeof slug[0] === "string") {
+    return slug[0];
+  }
+
+  // fallback: nothing found
+  return null;
+}
+
+async function loadLocation(params: Params | undefined) {
+  const idFromParams = extractId(params);
+  const decodedId = safeDecode(idFromParams ?? undefined);
+
+  if (!decodedId) {
+    return { location: null, currentStatus: null as Status | null, error: "Geen ID in URL." };
+  }
 
   try {
     const location = await prisma.location.findUnique({
@@ -38,6 +70,7 @@ async function loadLocation(idParam: string | undefined) {
     if (!location) {
       return {
         location: null,
+        currentStatus: null as Status | null,
         error: `Geen locatie gevonden met ID ${decodedId}`,
       };
     }
@@ -48,6 +81,7 @@ async function loadLocation(idParam: string | undefined) {
     console.error("Error loading machine detail page:", e);
     return {
       location: null,
+      currentStatus: null as Status | null,
       error: "Prisma-fout bij het ophalen van de locatie. Zie server logs.",
     };
   }
@@ -93,10 +127,9 @@ function timeAgo(iso?: Date | string | null) {
 }
 
 export default async function MachinePage({ params }: Props) {
-  const rawId = params?.id;
-  const { location, currentStatus, error } = await loadLocation(rawId);
+  const { location, currentStatus, error } = await loadLocation(params);
+  const rawParams = JSON.stringify(params ?? {}, null, 2);
 
-  // JSON-LD only if we have a location
   const jsonLd =
     location &&
     (() => {
@@ -154,18 +187,21 @@ export default async function MachinePage({ params }: Props) {
           verouderd of is de locatie verwijderd.
         </p>
 
-        {rawId && (
-          <p className="text-[11px] text-gray-400">
-            Gevraagde locatie-ID:{" "}
-            <code className="px-1 py-0.5 rounded bg-gray-100">{rawId}</code>
+        {error && (
+          <p className="text-[11px] text-red-500">
+            Debug-info:{" "}
+            <code className="bg-red-50 px-1 py-0.5 rounded">{error}</code>
           </p>
         )}
 
-        {error && (
-          <p className="text-[11px] text-red-500">
-            Debug-info: <code className="bg-red-50 px-1 py-0.5 rounded">{error}</code>
-          </p>
-        )}
+        <details className="text-[11px] text-gray-500">
+          <summary className="cursor-pointer select-none">
+            Raw route params (debug)
+          </summary>
+          <pre className="mt-1 bg-gray-50 border rounded p-2 overflow-x-auto">
+{rawParams}
+          </pre>
+        </details>
 
         <div className="flex flex-wrap gap-2 text-xs pt-2">
           <a
