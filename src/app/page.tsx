@@ -73,7 +73,7 @@ export default function Page() {
                 />
               </div>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight leading-tight text-slate-900">
-                Zie in één oogopslag welke statiegeldmachines werken en welke niet!
+                Zie in één oogopslag welke statiegeldmachines werken!
               </h1>
             </div>
 
