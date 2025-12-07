@@ -66,8 +66,11 @@ export default function NearbyList() {
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [favoriteChanges, setFavoriteChanges] = useState<
+    LocationWithDistance[]
+  >([]);
 
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   // 1) Load last known position from localStorage
   useEffect(() => {
@@ -164,13 +167,68 @@ export default function NearbyList() {
     sorted.sort((a, b) => {
       const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
       const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
-
       if (da !== db) return da - db;
       return a.name.localeCompare(b.name);
     });
-
     return sorted.slice(0, 5);
   }, [enriched]);
+
+  // 4) Detect changes in favourite machines and show a small alert
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!locations.length) return;
+    if (!favorites.length) return;
+
+    const STORAGE_KEY = "statiestatus_favorite_status_v1";
+
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const prev: Record<
+        string,
+        { status: ApiStatus | null; lastReportAt: string | null }
+      > = raw ? JSON.parse(raw) : {};
+
+      const changed: LocationWithDistance[] = [];
+      const next: Record<
+        string,
+        { status: ApiStatus | null; lastReportAt: string | null }
+      > = {};
+
+      favorites.forEach((id) => {
+        const loc = locations.find((l) => l.id === id);
+        if (!loc) return;
+
+        const currentStatus = loc.currentStatus ?? null;
+        const currentLast = loc.lastReportAt ?? null;
+        const prevEntry = prev[id];
+
+        if (
+          prevEntry &&
+          (prevEntry.status !== currentStatus ||
+            prevEntry.lastReportAt !== currentLast)
+        ) {
+          const withDist =
+            enriched.find((e) => e.id === id) ??
+            ({
+              ...loc,
+              distanceKm: null,
+            } as LocationWithDistance);
+
+          changed.push(withDist);
+        }
+
+        next[id] = { status: currentStatus, lastReportAt: currentLast };
+      });
+
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+      if (changed.length) {
+        setFavoriteChanges(changed);
+      }
+    } catch {
+      // ignore errors
+    }
+  }, [locations, favorites, enriched]);
 
   function formatDistance(d: number | null) {
     if (d == null || !isFinite(d)) return "Afstand onbekend";
@@ -236,6 +294,31 @@ export default function NearbyList() {
         </div>
       )}
 
+      {favoriteChanges.length > 0 && (
+        <div className="text-xs rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 space-y-1">
+          <p className="font-medium">
+            {favoriteChanges.length === 1
+              ? "1 favoriete machine is gewijzigd sinds je laatste bezoek."
+              : `${favoriteChanges.length} favoriete machines zijn gewijzigd sinds je laatste bezoek.`}
+          </p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {favoriteChanges.slice(0, 3).map((l) => (
+              <li key={l.id}>
+                {l.name} in {l.city}: nu{" "}
+                <b>{statusLabel(l.currentStatus)}</b>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setFavoriteChanges([])}
+            className="mt-1 text-[11px] underline"
+          >
+            Verbergen
+          </button>
+        </div>
+      )}
+
       {/* Favorieten */}
       {favoriteLocations.length > 0 && (
         <div className="space-y-2">
@@ -247,7 +330,6 @@ export default function NearbyList() {
             {favoriteLocations.map((l) => {
               const keyWorking = `${l.id}-WORKING`;
               const keyOut = `${l.id}-OUT_OF_ORDER`;
-
               return (
                 <li
                   key={l.id}
@@ -271,7 +353,6 @@ export default function NearbyList() {
                       ★ Verwijder
                     </button>
                   </div>
-
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-col gap-1">
                       <span className="inline-flex items-center rounded-full bg-gray-900 text-white px-2 py-0.5 text-[11px]">
@@ -290,7 +371,6 @@ export default function NearbyList() {
                       </span>
                     )}
                   </div>
-
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"
@@ -313,7 +393,6 @@ export default function NearbyList() {
                       {submittingId === keyOut ? "Bezig…" : "❌ Stuk nu"}
                     </button>
                   </div>
-
                   <div className="flex justify-end gap-2">
                     <a
                       href={`/machine/${l.id}`}
@@ -341,26 +420,22 @@ export default function NearbyList() {
           <span>Machines in de buurt</span>
           {hasRealLocation && <span>Gebaseerd op jouw locatie</span>}
         </div>
-
         {!locationResolved && (
           <p className="text-xs text-gray-500">
             We bepalen je locatie om machines in de buurt te tonen…
           </p>
         )}
-
         {geoError && (
           <p className="text-xs text-gray-500">
             We hebben geen toegang tot je locatie. We tonen een algemene
             lijst met locaties; gebruik de kaart voor exacte posities.
           </p>
         )}
-
         {nearbyLocations.length === 0 && !loading && (
           <p className="text-xs text-gray-500">
             Geen locaties gevonden. Probeer de kaart hierboven.
           </p>
         )}
-
         {nearbyLocations.length > 0 && (
           <ul className="space-y-2">
             {nearbyLocations.map((l) => (
@@ -386,7 +461,6 @@ export default function NearbyList() {
                     {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
                   </button>
                 </div>
-
                 <div className="flex items-center justify-between text-[11px] text-gray-500">
                   <span>
                     Status: <b>{statusLabel(l.currentStatus)}</b>
@@ -400,7 +474,6 @@ export default function NearbyList() {
                     <span>{formatDistance(l.distanceKm)}</span>
                   )}
                 </div>
-
                 <div className="flex justify-end gap-2">
                   <a
                     href={`/machine/${l.id}`}

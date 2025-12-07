@@ -6,6 +6,7 @@ import NavBar from "../components/NavBar";
 import MapClient from "../components/MapClient";
 import NearbyList from "../components/NearbyList";
 import InstallPrompt from "../components/InstallPrompt";
+import OnboardingIntro from "../components/OnboardingIntro";
 
 export const metadata: Metadata = {
   title: "statiestatus.nl – Check de status van statiegeldmachines in Nederland",
@@ -52,6 +53,7 @@ export default function Page() {
 
       <NavBar />
       <InstallPrompt />
+      <OnboardingIntro />
 
       <main className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-6 sm:space-y-8">
         {/* HERO */}
