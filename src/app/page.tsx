@@ -10,7 +10,7 @@ import InstallPrompt from "../components/InstallPrompt";
 export const metadata: Metadata = {
   title: "statiestatus.nl – Check de status van statiegeldmachines in Nederland",
   description:
-    "Voorkom een nutteloze rit. Bekijk actuele meldingen van andere bezoekers en zie hoe betrouwbaar elke locatie is.",
+    "Voorkom een nutteloos tripje naar de supermarkt. Bekijk actuele meldingen van andere bezoekers en zie hoe betrouwbaar elke locatie is.",
   metadataBase: new URL("https://www.statiestatus.nl"),
   alternates: {
     canonical: "https://www.statiestatus.nl/",
@@ -78,7 +78,7 @@ export default function Page() {
             </div>
 
             <p className="text-gray-700 text-sm sm:text-base md:text-lg">
-              Voorkom een nutteloze rit. Bekijk actuele meldingen van andere
+              Voorkom een nutteloos tripje naar de supermarkt. Bekijk actuele meldingen van andere
               bezoekers en zie hoe betrouwbaar elke locatie is.
             </p>
 
