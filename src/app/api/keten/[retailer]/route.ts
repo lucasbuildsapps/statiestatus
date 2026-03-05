@@ -6,28 +6,11 @@ import { deriveStatus } from "@/lib/derive";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function extractRetailerFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean); // ["api","keten","<retailer>"]
-    const last = parts[parts.length - 1];
-    if (!last) return null;
-    return decodeURIComponent(last);
-  } catch (e) {
-    console.error("extractRetailerFromUrl error:", e);
-    return null;
-  }
-}
-
-export async function GET(req: Request) {
-  const retailerName = extractRetailerFromUrl(req.url);
-
-  if (!retailerName) {
-    return NextResponse.json(
-      { error: "Missing retailer in URL." },
-      { status: 400 }
-    );
-  }
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ retailer: string }> }
+) {
+  const retailerName = decodeURIComponent((await params).retailer);
 
   try {
     const locations = await prisma.location.findMany({

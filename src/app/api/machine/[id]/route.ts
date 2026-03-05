@@ -6,27 +6,11 @@ import { deriveStatus } from "@/lib/derive";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function extractIdFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean); // ["api","machine","<id>"]
-    const last = parts[parts.length - 1];
-    return last || null;
-  } catch (e) {
-    console.error("extractIdFromUrl error:", e);
-    return null;
-  }
-}
-
-export async function GET(req: Request) {
-  const id = extractIdFromUrl(req.url);
-
-  if (!id) {
-    return NextResponse.json(
-      { error: "Missing machine ID in URL." },
-      { status: 400 }
-    );
-  }
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
 
   try {
     const location = await prisma.location.findUnique({

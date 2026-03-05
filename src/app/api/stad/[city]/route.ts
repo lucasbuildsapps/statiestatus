@@ -6,28 +6,11 @@ import { deriveStatus } from "@/lib/derive";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function extractCityFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean); // ["api","stad","<city>"]
-    const last = parts[parts.length - 1];
-    if (!last) return null;
-    return decodeURIComponent(last);
-  } catch (e) {
-    console.error("extractCityFromUrl error:", e);
-    return null;
-  }
-}
-
-export async function GET(req: Request) {
-  const cityName = extractCityFromUrl(req.url);
-
-  if (!cityName) {
-    return NextResponse.json(
-      { error: "Missing city in URL." },
-      { status: 400 }
-    );
-  }
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ city: string }> }
+) {
+  const cityName = decodeURIComponent((await params).city);
 
   try {
     const locations = await prisma.location.findMany({
