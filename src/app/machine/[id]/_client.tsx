@@ -325,12 +325,17 @@ export default function MachinePageClient() {
 
   const now = Date.now();
   let last7dReports = 0;
+  let prev7dReports = 0;
   let last30dReports = 0;
   for (const r of reports) {
     const ageMs = now - new Date(r.createdAt).getTime();
     if (ageMs <= 7 * 24 * 3600 * 1000) last7dReports++;
+    else if (ageMs <= 14 * 24 * 3600 * 1000) prev7dReports++;
     if (ageMs <= 30 * 24 * 3600 * 1000) last30dReports++;
   }
+  const velocityTrend =
+    last7dReports > prev7dReports ? "up" :
+    last7dReports < prev7dReports ? "down" : "same";
 
   const statusLabel = statusToLabel(location.currentStatus);
   const confidence = deriveConfidence(reports);
@@ -435,7 +440,11 @@ export default function MachinePageClient() {
             disabled={!!quickReporting}
             className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
           >
-            {quickReporting === "WORKING" ? "Bezig…" : "✅ Werkt nu"}
+            {quickReporting === "WORKING"
+              ? "Bezig…"
+              : location.currentStatus === "WORKING"
+              ? "✅ Werkt nog steeds"
+              : "✅ Werkt nu"}
           </button>
           <button
             type="button"
@@ -443,7 +452,11 @@ export default function MachinePageClient() {
             disabled={!!quickReporting}
             className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-red-50 border-red-200 text-red-900 hover:bg-red-100 disabled:opacity-60"
           >
-            {quickReporting === "OUT_OF_ORDER" ? "Bezig…" : "❌ Werkt niet"}
+            {quickReporting === "OUT_OF_ORDER"
+              ? "Bezig…"
+              : location.currentStatus === "OUT_OF_ORDER"
+              ? "❌ Nog steeds stuk"
+              : "❌ Werkt niet"}
           </button>
         </div>
       </section>
@@ -468,7 +481,15 @@ export default function MachinePageClient() {
           <div className="text-[11px] text-gray-500 mb-1">
             Meldingen laatste 7 dagen
           </div>
-          <div className="text-xl font-semibold">{last7dReports}</div>
+          <div className="flex items-baseline gap-2">
+            <div className="text-xl font-semibold">{last7dReports}</div>
+            {velocityTrend === "up" && (
+              <span className="text-[11px] text-emerald-600 font-medium">↑ actiever</span>
+            )}
+            {velocityTrend === "down" && (
+              <span className="text-[11px] text-gray-400">↓ rustiger</span>
+            )}
+          </div>
         </div>
       </section>
 

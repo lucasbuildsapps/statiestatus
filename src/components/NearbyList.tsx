@@ -360,62 +360,101 @@ export default function NearbyList() {
 
         {nearbyLocations.length > 0 && (
           <ul className="space-y-2">
-            {nearbyLocations.map((l) => (
-              <li
-                key={l.id}
-                className="rounded-xl border bg-white p-3 flex flex-col gap-1"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-medium">{l.name}</div>
-                    <div className="text-xs text-gray-600">
-                      {l.retailer} • {l.city}
+            {nearbyLocations.map((l) => {
+              const keyWorking = `${l.id}-WORKING`;
+              const keyOut = `${l.id}-OUT_OF_ORDER`;
+              return (
+                <li
+                  key={l.id}
+                  className="rounded-xl border bg-white p-3 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{l.name}</div>
+                      <div className="text-xs text-gray-600">
+                        {l.retailer} • {l.city}
+                      </div>
+                      <div className="text-[11px] text-gray-500">
+                        {l.address}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-gray-500">
-                      {l.address}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleFavorite(l.id)}
-                    className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
-                  >
-                    {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
-                        statusColorClasses(l.currentStatus)
-                      }
+                    <button
+                      type="button"
+                      onClick={() => toggleFavorite(l.id)}
+                      className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
                     >
-                      {statusLabel(l.currentStatus)}
-                    </span>
+                      {isFavorite(l.id) ? "★ Favoriet" : "☆ Favoriet"}
+                    </button>
                   </div>
-                  {l.distanceKm != null && (
-                    <span className="text-[11px] text-gray-500">{formatDistance(l.distanceKm)}</span>
-                  )}
-                </div>
 
-                <div className="flex justify-end gap-2">
-                  <a
-                    href={`/machine/${l.id}`}
-                    className="text-[11px] text-gray-600 hover:underline"
-                  >
-                    Details
-                  </a>
-                  <a
-                    href="#kaart"
-                    className="text-[11px] text-gray-500 hover:underline"
-                  >
-                    Op kaart bekijken
-                  </a>
-                </div>
-              </li>
-            ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className={
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                          statusColorClasses(l.currentStatus)
+                        }
+                      >
+                        {statusLabel(l.currentStatus)}
+                      </span>
+                      <span className="text-[11px] text-gray-500">
+                        Laatste melding:{" "}
+                        {l.lastReportAt
+                          ? timeAgo(l.lastReportAt)
+                          : "nog geen meldingen"}
+                      </span>
+                    </div>
+                    {l.distanceKm != null && (
+                      <span className="text-[11px] text-gray-500">
+                        {formatDistance(l.distanceKm)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => quickReport(l.id, "WORKING")}
+                      disabled={submittingId === keyWorking}
+                      className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
+                    >
+                      {submittingId === keyWorking
+                        ? "Bezig…"
+                        : l.currentStatus === "WORKING"
+                        ? "✅ Werkt nog steeds"
+                        : "✅ Werkt nu"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => quickReport(l.id, "OUT_OF_ORDER")}
+                      disabled={submittingId === keyOut}
+                      className="flex-1 min-w-[110px] text-xs px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 disabled:opacity-60"
+                    >
+                      {submittingId === keyOut
+                        ? "Bezig…"
+                        : l.currentStatus === "OUT_OF_ORDER"
+                        ? "❌ Nog steeds stuk"
+                        : "❌ Stuk nu"}
+                    </button>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <a
+                      href={`/machine/${l.id}`}
+                      className="text-[11px] text-gray-600 hover:underline"
+                    >
+                      Details
+                    </a>
+                    <a
+                      href="#kaart"
+                      className="text-[11px] text-gray-500 hover:underline"
+                    >
+                      Op kaart bekijken
+                    </a>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
