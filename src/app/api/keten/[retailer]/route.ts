@@ -51,10 +51,8 @@ export async function GET(
       retailer: retailerName,
       locations: withStatus,
     });
-  } catch (e: any) {
+  } catch (e) {
     console.error("GET /api/keten/[retailer] error:", e);
-    const message =
-      e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Interne serverfout." }, { status: 500 });
   }
 }

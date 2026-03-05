@@ -38,12 +38,10 @@ export async function GET(
         currentStatus,
       },
     });
-  } catch (e: any) {
+  } catch (e) {
     console.error("GET /api/machine/[id] error:", e);
-    const message =
-      e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error";
     return NextResponse.json(
-      { error: message },
+      { error: "Interne serverfout." },
       { status: 500 }
     );
   }
