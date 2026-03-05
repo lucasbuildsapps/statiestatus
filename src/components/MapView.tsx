@@ -62,6 +62,36 @@ function confidenceText(total?: number) {
   return `Betrouwbare status (${total}+ meldingen).`;
 }
 
+// Defined outside MapView so React never sees a new component type on re-render,
+// which would cause unnecessary unmount/remount of the Leaflet controller.
+function MapController({
+  useMap,
+  onMount,
+  pos,
+  centeredOnUser,
+  userInteracted,
+  onCentered,
+}: {
+  useMap: () => LMap;
+  onMount: (m: LMap) => void;
+  pos: { lat: number; lng: number } | null;
+  centeredOnUser: boolean;
+  userInteracted: boolean;
+  onCentered: () => void;
+}) {
+  const m = useMap();
+  useEffect(() => {
+    onMount(m);
+  }, [m, onMount]);
+  useEffect(() => {
+    if (m && pos && !centeredOnUser && !userInteracted) {
+      m.setView([pos.lat, pos.lng], 14);
+      onCentered();
+    }
+  }, [m, pos, centeredOnUser, userInteracted, onCentered]);
+  return null;
+}
+
 export default function MapView() {
   const [leaflet, setLeaflet] = useState<LeafletAPI | null>(null);
   const [map, setMap] = useState<LMap | null>(null);
@@ -87,6 +117,9 @@ export default function MapView() {
   );
 
   const { isFavorite, toggleFavorite } = useFavorites();
+
+  const handleMapMount = useCallback((m: LMap) => setMap(m), []);
+  const handleCentered = useCallback(() => setCenteredOnUser(true), []);
   const markerRefs = useRef<Record<string, LeafletCircle | null>>({});
 
   // Shared loader using the client cache
@@ -314,22 +347,6 @@ export default function MapView() {
 
   const { MapContainer, TileLayer, Popup, CircleMarker, useMap } = leaflet;
 
-  function MapController() {
-    const m = useMap();
-    useEffect(() => {
-      setMap(m);
-    }, [m]);
-
-    useEffect(() => {
-      if (m && pos && !centeredOnUser && !userInteracted) {
-        m.setView([pos.lat, pos.lng], 14);
-        setCenteredOnUser(true);
-      }
-    }, [m, pos, centeredOnUser, userInteracted]);
-
-    return null;
-  }
-
   return (
     <div className="relative">
       {/* Controls wrapper (positioned) */}
@@ -460,7 +477,14 @@ export default function MapView() {
           scrollWheelZoom
           className="w-full h-full"
         >
-          <MapController />
+          <MapController
+            useMap={useMap}
+            onMount={handleMapMount}
+            pos={pos}
+            centeredOnUser={centeredOnUser}
+            userInteracted={userInteracted}
+            onCentered={handleCentered}
+          />
 
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -674,6 +698,7 @@ function StatusDot({
 function Legend() {
   const items: Array<{ label: string; color: string }> = [
     { label: "Werkend", color: colorForStatus("WORKING") },
+    { label: "Problemen", color: colorForStatus("ISSUES") },
     { label: "Stuk", color: colorForStatus("OUT_OF_ORDER") },
     { label: "Onbekend", color: colorForStatus(null) },
   ];
@@ -722,13 +747,14 @@ function ReportForm({
   const [status, setStatus] = useState<"WORKING" | "OUT_OF_ORDER">("WORKING");
   const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
   const [note, setNote] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
+
 
     const reason =
       status === "OUT_OF_ORDER" && issueType
@@ -749,16 +775,16 @@ function ReportForm({
 
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data?.error || "Er ging iets mis");
+        setMsg({ text: data?.error || "Er ging iets mis", ok: false });
         return;
       }
 
-      setMsg("✅ Melding geplaatst.");
+      setMsg({ text: "✅ Melding geplaatst.", ok: true });
       setNote("");
       setIssueType(null);
       if (onSuccess) await onSuccess();
     } catch {
-      setMsg("Netwerkfout");
+      setMsg({ text: "Netwerkfout", ok: false });
     } finally {
       setLoading(false);
     }
@@ -836,7 +862,18 @@ function ReportForm({
         {loading ? "Versturen…" : "Melding plaatsen"}
       </button>
 
-      {msg && <div className="text-xs pt-1">{msg}</div>}
+      {msg && (
+        <div
+          className={
+            "text-xs pt-1 rounded px-2 py-1 " +
+            (msg.ok
+              ? "bg-emerald-50 text-emerald-800"
+              : "bg-red-50 text-red-800")
+          }
+        >
+          {msg.text}
+        </div>
+      )}
     </form>
   );
 }
