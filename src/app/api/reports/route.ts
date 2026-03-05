@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import { ipHash } from "@/lib/ip";
+import { canSubmit, sanitizeNote } from "@/lib/antiSpam";
 
 type ReportStatus = "WORKING" | "ISSUES" | "OUT_OF_ORDER";
 
@@ -15,11 +16,6 @@ type PostBody = {
   note?: string;
 };
 
-// Kleine helper om een hash van het IP-adres te maken
-function hashIp(ip: string): string {
-  return crypto.createHash("sha256").update(ip).digest("hex");
-}
-
 export async function POST(req: Request) {
   try {
     // 1. Body uitlezen als JSON
@@ -28,7 +24,7 @@ export async function POST(req: Request) {
     const locationId = body.locationId?.trim();
     const status = body.status;
     // altijd een string, lege string als er geen notitie is
-    const note = body.note?.trim() ?? "";
+    const note = sanitizeNote(body.note ?? "");
 
     // 2. Basisvalidatie
     if (!locationId) {
@@ -50,19 +46,29 @@ export async function POST(req: Request) {
     const realIp = req.headers.get("x-real-ip") || "";
     const rawIp =
       xff.split(",")[0].trim() || realIp || "unknown"; // eerste IP uit de x-forwarded-for chain
-    const ipHash = hashIp(rawIp);
+    const secret = process.env.IP_HASH_SECRET ?? "default-secret";
+    const hashedIp = ipHash(rawIp, secret);
 
-    // 4. Nieuwe melding opslaan in de database
+    // 4. Rate limiting
+    const rateCheck = canSubmit(hashedIp);
+    if (!rateCheck.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Te veel meldingen. Probeer het later opnieuw.", retryAfter: rateCheck.retryAfter },
+        { status: 429 }
+      );
+    }
+
+    // 6. Nieuwe melding opslaan in de database
     const report = await prisma.report.create({
       data: {
         locationId,
         status,
         note,
-        ipHash, // verplicht veld in je Prisma-model
+        ipHash: hashedIp, // verplicht veld in je Prisma-model
       },
     });
 
-    // 5. Succes-response voor de frontend
+    // 7. Succes-response voor de frontend
     return NextResponse.json(
       { ok: true, reportId: report.id },
       { status: 201 }
