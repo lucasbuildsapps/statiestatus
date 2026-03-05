@@ -24,6 +24,9 @@ model Location {
   city      String
   createdAt DateTime @default(now())
   reports   Report[]
+
+  @@index([retailer])
+  @@index([city])
 }
 
 model Report {
@@ -36,4 +39,5 @@ model Report {
   createdAt  DateTime @default(now())
 
   @@index([locationId, createdAt])
+  @@index([ipHash, createdAt])
 }
