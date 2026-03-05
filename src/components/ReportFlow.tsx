@@ -11,6 +11,7 @@ import {
   fetchLocationsShared,
   type ApiLocation,
 } from "@/lib/locationsClient";
+import { distanceKm } from "@/lib/geo";
 
 type Machine = {
   id: string;
@@ -34,20 +35,6 @@ type Screen =
   | "report"
   | "submitting"
   | "success";
-
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
 
 function formatDistance(d: number | null) {
   if (d == null || !isFinite(d)) return "Afstand onbekend";
@@ -126,7 +113,7 @@ export default function ReportFlow() {
     }
     return machines.map((m) => ({
       ...m,
-      distanceKm: haversineKm(userPos.lat, userPos.lng, m.lat, m.lng),
+      distanceKm: distanceKm({ lat: userPos.lat, lng: userPos.lng }, { lat: m.lat, lng: m.lng }),
     }));
   }, [machines, userPos]);
 
@@ -173,7 +160,7 @@ export default function ReportFlow() {
 
     const withDist: MachineWithDistance[] = machines.map((m) => ({
       ...m,
-      distanceKm: haversineKm(position.lat, position.lng, m.lat, m.lng),
+      distanceKm: distanceKm({ lat: position.lat, lng: position.lng }, { lat: m.lat, lng: m.lng }),
     }));
 
     const sorted = withDist.sort((a, b) => {
@@ -244,6 +231,8 @@ export default function ReportFlow() {
       }
 
       setScreen("success");
+      // Pre-warm cache so the map shows fresh data when user navigates back
+      fetchLocationsShared(true).catch(() => {});
     } catch (err) {
       console.error(err);
       setSubmitError("Netwerkfout bij verzenden.");
