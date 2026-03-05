@@ -8,6 +8,7 @@ import {
   type ApiLocation,
   type ApiStatus,
 } from "@/lib/locationsClient";
+import { distanceKm as calcDistanceKm } from "@/lib/geo";
 
 type LocationItem = ApiLocation;
 
@@ -36,23 +37,11 @@ function statusLabel(s: ApiStatus | null): string {
   return "Onbekend";
 }
 
-function distanceKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+function statusColorClasses(s: ApiStatus | null): string {
+  if (s === "WORKING") return "bg-emerald-100 text-emerald-900";
+  if (s === "ISSUES") return "bg-amber-100 text-amber-900";
+  if (s === "OUT_OF_ORDER") return "bg-red-100 text-red-900";
+  return "bg-gray-100 text-gray-700";
 }
 
 export default function NearbyList() {
@@ -149,7 +138,7 @@ export default function NearbyList() {
     () =>
       locations.map((l) => ({
         ...l,
-        distanceKm: pos ? distanceKm(pos.lat, pos.lng, l.lat, l.lng) : null,
+        distanceKm: pos ? calcDistanceKm({ lat: pos.lat, lng: pos.lng }, { lat: l.lat, lng: l.lng }) : null,
       })),
     [locations, pos]
   );
@@ -201,6 +190,9 @@ export default function NearbyList() {
         return;
       }
       setMessage("✅ Bedankt! Snelmelding geplaatst.");
+      // Refresh so status badges reflect the new report
+      const fresh = await fetchLocationsShared(true);
+      setLocations(fresh);
     } catch {
       setMessage("Netwerkfout bij verzenden.");
     } finally {
@@ -274,7 +266,12 @@ export default function NearbyList() {
 
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-col gap-1">
-                      <span className="inline-flex items-center rounded-full bg-gray-900 text-white px-2 py-0.5 text-[11px]">
+                      <span
+                        className={
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                          statusColorClasses(l.currentStatus)
+                        }
+                      >
                         {statusLabel(l.currentStatus)}
                       </span>
                       <span className="text-[11px] text-gray-500">
@@ -387,17 +384,20 @@ export default function NearbyList() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-gray-500">
-                  <span>
-                    Status: <b>{statusLabel(l.currentStatus)}</b>
-                    {" • "}
-                    Laatste melding:{" "}
-                    {l.lastReportAt
-                      ? timeAgo(l.lastReportAt)
-                      : "nog geen meldingen"}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                        statusColorClasses(l.currentStatus)
+                      }
+                    >
+                      {statusLabel(l.currentStatus)}
+                    </span>
+                    </span>
+                  </div>
                   {l.distanceKm != null && (
-                    <span>{formatDistance(l.distanceKm)}</span>
+                    <span className="text-[11px] text-gray-500">{formatDistance(l.distanceKm)}</span>
                   )}
                 </div>
 

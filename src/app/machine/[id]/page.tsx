@@ -1,8 +1,8 @@
 // src/app/machine/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -142,13 +142,41 @@ function buildDailyBuckets(reports: ApiReport[], days: number = 30): DailyBucket
 // ---------- Page component ----------
 
 export default function MachinePageClient() {
-  const pathname = usePathname();
-  const id = useMemo(() => {
-    const parts = pathname.split("/").filter(Boolean);
-    return parts[parts.length - 1] || null;
-  }, [pathname]);
+  const params = useParams();
+  const id = typeof params.id === "string" ? params.id : null;
 
   const [state, setState] = useState<LoadState>({ type: "idle" });
+  const [quickReporting, setQuickReporting] = useState<"WORKING" | "OUT_OF_ORDER" | null>(null);
+  const [quickMessage, setQuickMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function submitQuickReport(status: "WORKING" | "OUT_OF_ORDER") {
+    if (!id || quickReporting) return;
+    setQuickReporting(status);
+    setQuickMessage(null);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId: id, status, note: "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setQuickMessage({ ok: false, text: data?.error ?? "Er ging iets mis." });
+        return;
+      }
+      setQuickMessage({ ok: true, text: "✅ Bedankt voor je melding!" });
+      // Reload location to reflect new report
+      const locRes = await fetch(`/api/machine/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (locRes.ok) {
+        const locData = (await locRes.json()) as { location: ApiLocation };
+        setState({ type: "loaded", location: locData.location });
+      }
+    } catch {
+      setQuickMessage({ ok: false, text: "Netwerkfout bij verzenden." });
+    } finally {
+      setQuickReporting(null);
+    }
+  }
 
   useEffect(() => {
     if (!id) {
@@ -394,21 +422,36 @@ export default function MachinePageClient() {
         <p className="text-xs text-gray-600">
           Meld met één klik of hij op dit moment werkt. Je melding is anoniem.
         </p>
+        {quickMessage && (
+          <div
+            className={
+              "text-xs rounded-lg px-3 py-2 border " +
+              (quickMessage.ok
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-red-50 border-red-200 text-red-800")
+            }
+          >
+            {quickMessage.text}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-900">
-            <span>✅ Werkt nu</span>
+          <button
+            type="button"
+            onClick={() => submitQuickReport("WORKING")}
+            disabled={!!quickReporting}
+            className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            {quickReporting === "WORKING" ? "Bezig…" : "✅ Werkt nu"}
           </button>
-          <button className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-red-50 border-red-200 text-red-900">
-            <span>❌ Werkt niet</span>
+          <button
+            type="button"
+            onClick={() => submitQuickReport("OUT_OF_ORDER")}
+            disabled={!!quickReporting}
+            className="w-full rounded-xl border px-3 py-2 text-sm flex items-center justify-center gap-2 bg-red-50 border-red-200 text-red-900 hover:bg-red-100 disabled:opacity-60"
+          >
+            {quickReporting === "OUT_OF_ORDER" ? "Bezig…" : "❌ Werkt niet"}
           </button>
         </div>
-        <p className="text-[11px] text-gray-500">
-          Gebruik de knop op de kaart of de pagina{" "}
-          <a href="/reports" className="underline">
-            &ldquo;Snel melding maken&rdquo;
-          </a>{" "}
-          om daadwerkelijk een melding te plaatsen.
-        </p>
       </section>
 
       {/* Stats cards */}
