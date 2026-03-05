@@ -16,6 +16,13 @@ type LocationWithDistance = LocationItem & {
   distanceKm: number | null;
 };
 
+const STALE_MS = 14 * 24 * 3600 * 1000;
+
+function isStale(iso?: string | null): boolean {
+  if (!iso) return true;
+  return Date.now() - new Date(iso).getTime() > STALE_MS;
+}
+
 function timeAgo(iso?: string | null) {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
@@ -274,7 +281,7 @@ export default function NearbyList() {
                       >
                         {statusLabel(l.currentStatus)}
                       </span>
-                      <span className="text-[11px] text-gray-500">
+                      <span className={`text-[11px] ${isStale(l.lastReportAt) ? "text-amber-600" : "text-gray-500"}`}>
                         Laatste melding:{" "}
                         {l.lastReportAt
                           ? timeAgo(l.lastReportAt)
@@ -397,7 +404,7 @@ export default function NearbyList() {
                       >
                         {statusLabel(l.currentStatus)}
                       </span>
-                      <span className="text-[11px] text-gray-500">
+                      <span className={`text-[11px] ${isStale(l.lastReportAt) ? "text-amber-600" : "text-gray-500"}`}>
                         Laatste melding:{" "}
                         {l.lastReportAt
                           ? timeAgo(l.lastReportAt)

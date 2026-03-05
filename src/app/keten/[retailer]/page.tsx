@@ -26,6 +26,9 @@ export async function generateMetadata({
   return {
     title,
     description,
+    alternates: {
+      canonical: `https://www.statiestatus.nl/keten/${retailer}`,
+    },
     openGraph: {
       title,
       description,

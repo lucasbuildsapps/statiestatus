@@ -137,6 +137,13 @@ function buildDailyBuckets(reports: ApiReport[], days: number = 30): DailyBucket
   return buckets;
 }
 
+const STALE_MS = 14 * 24 * 3600 * 1000; // 14 days
+
+function isStale(iso?: string | null): boolean {
+  if (!iso) return true;
+  return Date.now() - new Date(iso).getTime() > STALE_MS;
+}
+
 // ---------- Page component ----------
 
 export default function MachinePageClient() {
@@ -392,6 +399,13 @@ export default function MachinePageClient() {
             </span>
           )}
         </div>
+
+        {isStale(lastReport?.createdAt) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ⚠️ Geen recente meldingen — de weergegeven status is mogelijk verouderd. Ken jij de actuele situatie?{" "}
+            <span className="font-medium">Meld het hieronder.</span>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 text-xs pt-2">
           <a

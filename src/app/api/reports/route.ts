@@ -7,7 +7,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ipHash } from "@/lib/ip";
-import { canSubmit, sanitizeNote } from "@/lib/antiSpam";
+import { sanitizeNote } from "@/lib/antiSpam";
+
+const RATE_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_SECONDS ?? 300) * 1000;
+const RATE_MAX = Number(process.env.RATE_LIMIT_MAX ?? 3);
 
 const postSchema = z.object({
   locationId: z.string().min(1),
@@ -37,11 +40,14 @@ export async function POST(req: Request) {
     const secret = process.env.IP_HASH_SECRET ?? "default-secret";
     const hashedIp = ipHash(rawIp, secret);
 
-    // 3. Rate limiting
-    const rateCheck = canSubmit(hashedIp);
-    if (!rateCheck.ok) {
+    // 3. Rate limiting via DB (persistent across serverless cold-starts)
+    const windowStart = new Date(Date.now() - RATE_WINDOW_MS);
+    const recentCount = await prisma.report.count({
+      where: { ipHash: hashedIp, createdAt: { gte: windowStart } },
+    });
+    if (recentCount >= RATE_MAX) {
       return NextResponse.json(
-        { ok: false, error: "Te veel meldingen. Probeer het later opnieuw.", retryAfter: rateCheck.retryAfter },
+        { ok: false, error: "Te veel meldingen. Probeer het later opnieuw." },
         { status: 429 }
       );
     }
@@ -52,7 +58,7 @@ export async function POST(req: Request) {
         locationId,
         status,
         note,
-        ipHash: hashedIp, // verplicht veld in je Prisma-model
+        ipHash: hashedIp,
       },
     });
 
