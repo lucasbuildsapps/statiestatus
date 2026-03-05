@@ -334,10 +334,6 @@ export default function MachinePageClient() {
     if (ageMs <= 30 * 24 * 3600 * 1000) last30dReports++;
   }
 
-  const workingCount = reports.filter((r) => r.status === "WORKING").length;
-  const outCount = reports.filter((r) => r.status === "OUT_OF_ORDER").length;
-  const issuesCount = reports.filter((r) => r.status === "ISSUES").length;
-
   const statusLabel = statusToLabel(location.currentStatus);
   const confidence = deriveConfidence(reports);
   const buckets = buildDailyBuckets(reports, 30);

@@ -1,8 +1,8 @@
 // src/app/stad/[city]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +31,16 @@ function statusLabel(s: ApiStatus | null) {
   return "Onbekend";
 }
 
-export default function CityPageClient() {
-  const pathname = usePathname();
+function statusColorClasses(s: ApiStatus | null): string {
+  if (s === "WORKING") return "bg-emerald-100 text-emerald-900";
+  if (s === "ISSUES") return "bg-amber-100 text-amber-900";
+  if (s === "OUT_OF_ORDER") return "bg-red-100 text-red-900";
+  return "bg-gray-100 text-gray-700";
+}
 
-  const city = useMemo(() => {
-    const parts = pathname.split("/").filter(Boolean);
-    const last = parts[parts.length - 1] || "";
-    return last ? decodeURIComponent(last) : null;
-  }, [pathname]);
+export default function CityPageClient() {
+  const params = useParams();
+  const city = typeof params.city === "string" ? decodeURIComponent(params.city) : null;
 
   const [state, setState] = useState<LoadState>({ type: "idle" });
 
@@ -277,25 +279,19 @@ export default function CityPageClient() {
           </p>
         ) : (
           <>
-            <div className="h-4 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div className="flex h-4 w-full rounded-full bg-gray-100 overflow-hidden">
               <div
                 className="h-full bg-emerald-500"
                 style={{ width: `${workingShare}%` }}
               />
               <div
                 className="h-full bg-red-400"
-                style={{
-                  width: `${problemShare}%`,
-                  marginLeft: `${workingShare}%`,
-                }}
+                style={{ width: `${problemShare}%` }}
               />
               {unknownCount > 0 && (
                 <div
                   className="h-full bg-gray-300"
-                  style={{
-                    width: `${unknownShare}%`,
-                    marginLeft: `${workingShare + problemShare}%`,
-                  }}
+                  style={{ width: `${unknownShare}%` }}
                 />
               )}
             </div>
@@ -340,7 +336,12 @@ export default function CityPageClient() {
                     {l.address}
                   </div>
                 </div>
-                <span className="text-[11px] px-2 py-1 rounded-full bg-gray-900 text-white">
+                <span
+                  className={
+                    "text-[11px] px-2 py-1 rounded-full font-medium " +
+                    statusColorClasses(l.currentStatus)
+                  }
+                >
                   {statusLabel(l.currentStatus)}
                 </span>
               </div>

@@ -394,7 +394,6 @@ export default function NearbyList() {
                     >
                       {statusLabel(l.currentStatus)}
                     </span>
-                    </span>
                   </div>
                   {l.distanceKm != null && (
                     <span className="text-[11px] text-gray-500">{formatDistance(l.distanceKm)}</span>
